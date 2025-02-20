@@ -1,0 +1,51 @@
+/* Estilizar los títulos de sección */
+#custom_checkout_fields h3 {
+    font-size: 22px;
+    font-weight: bold;
+    color: #4CAF50; /* Verde */
+    border-bottom: 2px solid #ddd;
+    padding-bottom: 5px;
+    margin-top: 20px;
+}
+
+
+/* Ajustar el checkbox */
+.woocommerce form .woocommerce-form__label-for-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Mejorar la visibilidad de los radio buttons */
+.woocommerce form .woocommerce-checkout .form-row input[type="radio"] {
+    margin-right: 5px;
+}
+
+/* Espaciado entre secciones */
+#custom_checkout_fields{
+    background: #f9f9f9;
+    border-radius: 8px;
+}
+
+
+
+.woocommerce-additional-fields {
+    display: none !important; /* Oculta la sección de información adicional */
+}
+
+#adminmenu .current div.wp-menu-image::before {
+  color:#fff0 !important;
+}
+
+/*
+* Removemos los detalles de facturacion
+*/
+
+.woocommerce-billing-fields h3 {
+    display: none !important;
+}
+.woocommerce-billing-fields {
+    display: none !important;
+}
+
+
