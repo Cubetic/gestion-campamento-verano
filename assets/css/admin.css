@@ -1,0 +1,80 @@
+/* Estilos generales de la tabla */
+    .wp-list-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    /* Definir anchos específicos para las columnas */
+    .wp-list-table th.column-id,
+    .wp-list-table td.column-id {
+        width: 5%;
+    }
+    .wp-list-table th.column-nombre,
+    .wp-list-table td.column-nombre,
+    .wp-list-table th.column-apellidos,
+    .wp-list-table td.column-apellidos {
+        width: 10%;
+    }
+    .wp-list-table th.column-fecha,
+    .wp-list-table td.column-fecha,
+    .wp-list-table th.column-curso,
+    .wp-list-table td.column-curso {
+        width: 8%;
+    }
+    .wp-list-table th.column-semanas,
+    .wp-list-table td.column-semanas {
+        width: 30%;
+    }
+    .wp-list-table th.column-fraccionamiento,
+    .wp-list-table td.column-fraccionamiento {
+        width: 10%;
+    }
+    .wp-list-table th.column-acciones,
+    .wp-list-table td.column-acciones {
+        width: 10%;
+    }
+
+    /* Estilos para la información de semanas */
+    .semana-item {
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .semana-item:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+    .semana-titulo {
+        font-weight: bold;
+        font-size: 1.1em;
+        margin-bottom: 5px;
+        color: #0073aa;
+    }
+    .semana-detalle {
+        margin-left: 5px;
+        line-height: 1.5;
+        display: block;
+    }
+    .acogida-Si, .beca-Si {
+        color: #46b450; /* verde */
+    }
+    .acogida-no, .beca-no {
+        color: #dc3232; /* rojo */
+    }
+
+    /* ... tus estilos de tabla ... */
+    .wp-list-table th.column-fraccionamiento,
+    .wp-list-table td.column-fraccionamiento {
+        width: 15%;
+    }
+    .fraccion-item {
+        margin-bottom: 10px;
+        border-bottom: 1px solid #f0f0f0;
+        padding-bottom: 5px;
+    }
+    .fraccion-item:last-child {
+        border-bottom: none;
+    }
+    .fraccion-estado-completado { color: #46b450; }
+    .fraccion-estado-pendiente { color: #dc3232; }

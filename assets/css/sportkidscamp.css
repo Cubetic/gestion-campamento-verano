@@ -1,36 +1,104 @@
 /* Estilizar los títulos de sección */
+.woocommerce-notices-wrapper {
+display: none !important;
+}
+/*.et_pb_wc_checkout_billing > div:nth-child(1) {
+display: none;
+}*/
+.woocommerce-info {
+display: none;
+}
+.coupon {
+display: none !important;
+}
+
+table.shop_table:nth-child(1) > thead:nth-child(1) {
+display: none;
+}
+
+.wapf--inner {
+display: none !important;
+}
+td.product-price {
+display: none !important;
+}
+
+td.product-quantity {
+display: none !important;
+}
+
+td.product-subtotal {
+display: none !important;
+}
+
 #custom_checkout_fields h3 {
-    font-size: 22px;
+    font-size: 16px;
     font-weight: bold;
     color: #4CAF50; /* Verde */
     border-bottom: 2px solid #ddd;
     padding-bottom: 5px;
-    margin-top: 20px;
+    margin-top: 30px;
+}
+
+#custom_checkout_fields p {
+padding: 5px;
+margin-top : 10px;
 }
 
 
-/* Ajustar el checkbox */
-.woocommerce form .woocommerce-form__label-for-checkbox {
+.radio-inline-group > .woocommerce-input-wrapper{
     display: flex;
-    align-items: center;
-    gap: 8px;
+    gap: 20px;
 }
 
-/* Mejorar la visibilidad de los radio buttons */
-.woocommerce form .woocommerce-checkout .form-row input[type="radio"] {
-    margin-right: 5px;
-}
 
 /* Espaciado entre secciones */
 #custom_checkout_fields{
     background: #f9f9f9;
-    border-radius: 8px;
+  opacity: 0.7;
+  padding: 20px !important;
 }
 
+.stock-info {
+  font-weight: bold;
+  margin-left: 5px;
+}
 
+/* Color verde para plazas disponibles */
+.stock-info:not(:contains('Sin plazas')) {
+  color: #28a745;
+}
+
+/* Color rojo para sin plazas */
+.stock-info:contains('Sin plazas') {
+  color: #dc3545;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.wapf-input-label.sin-stock {
+  opacity: 0.7;
+  text-decoration: line-through;
+}
+
+.stock-info {
+  font-weight: bold;
+  margin-left: 5px;
+}
+
+/* Color verde para plazas disponibles */
+.stock-info:not(:contains('Sin plazas')) {
+  color: #28a745;
+}
+
+/* Color rojo para sin plazas */
+.stock-info:contains('Sin plazas') {
+  color: #dc3545;
+}
 
 .woocommerce-additional-fields {
-    display: none !important; /* Oculta la sección de información adicional */
+    /*display: none !important; /* Oculta la sección de información adicional */
 }
 
 #adminmenu .current div.wp-menu-image::before {
@@ -47,5 +115,21 @@
 .woocommerce-billing-fields {
     display: none !important;
 }
+
+.beca-limite-alcanzado {
+    color: #dc3545 !important;
+    font-weight: bold !important;
+  text-decoration: line-through !important;
+}
+
+.woocommerce-checkout p.woocommerce-invalid-required-field span.error {
+  color: #93003c;
+  display: block !important;
+  font-weight: bold;
+}
+
+
+
+
 
 
