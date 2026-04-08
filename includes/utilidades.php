@@ -5,6 +5,39 @@ if (!defined('ABSPATH')) {
     exit; // Salir si se accede directamente
 }
 
+/**
+ * Devuelve las escuelas detectadas en el carrito en base al producto asociado.
+ */
+function skc_obtener_escuelas_en_carrito(): array
+{
+    if (!function_exists('WC') || !WC()->cart) {
+        return [];
+    }
+
+    $escuelas = [];
+    foreach (WC()->cart->get_cart() as $cart_item) {
+        $product_id = isset($cart_item['product_id']) ? (int) $cart_item['product_id'] : 0;
+        $escuela_id = skc_obtener_escuela_id_por_producto($product_id);
+
+        if ($escuela_id) {
+            $escuelas[$escuela_id] = $escuela_id;
+        }
+    }
+
+    return array_values($escuelas);
+}
+
+/**
+ * Impide mezclas de escuelas en el mismo carrito para evitar ambiguedades de stock.
+ */
+function skc_validar_carrito_una_escuela(): void
+{
+    $escuelas = skc_obtener_escuelas_en_carrito();
+    if (count($escuelas) > 1) {
+        wc_add_notice('No se pueden combinar productos de distintas escuelas en el mismo pedido.', 'error');
+    }
+}
+
 //add_action('wp_footer', 'depurar_carrito_woocommerce');
 // Agrega este código al principio de tu functions.php o en tu plugin de pruebas
 add_action('init', function() {
@@ -143,6 +176,9 @@ function obtener_info_cart() {
     $cart = WC()->cart->get_cart();
 
     foreach ($cart as $cart_item) {
+        $product_id = isset($cart_item['product_id']) ? (int) $cart_item['product_id'] : 0;
+        $escuela_id = skc_obtener_escuela_id_por_producto($product_id);
+
         // Verifica que el artículo tenga la información personalizada "wapf"
         if (!isset($cart_item['wapf']) || !is_array($cart_item['wapf'])) {
             continue;
@@ -169,6 +205,8 @@ function obtener_info_cart() {
                         'precio' => 0,
                         'tipo'   => ''
                     ),
+                    'escuela_id' => $escuela_id,
+                    'product_id' => $product_id,
                     'acogida' => '',
                     'beca'    => ''
                 );

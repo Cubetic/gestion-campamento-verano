@@ -52,6 +52,12 @@ if (isset($_POST['guardar_cambios'])) {
             }
             // --- Actualizar plazas_reservadas ---
             if (isset($_POST['plazas_reservadas']) && is_array($_POST['plazas_reservadas'])) {
+                // 0. Obtenemos el array antiguo guardado en el pedido para preservar contexto (escuela_id).
+                $old_plazas = $pedido->get_meta('plazas_reservadas');
+                if (!is_array($old_plazas)) {
+                    $old_plazas = [];
+                }
+
                 // 1. Armamos el nuevo array con los datos enviados
                 $nuevo_plazas = [];
                 foreach ($_POST['plazas_reservadas'] as $semana_label => $datos_semana) {
@@ -62,18 +68,18 @@ if (isset($_POST['guardar_cambios'])) {
                     if (empty($nuevo_label)) {
                         $nuevo_label = $semana_label;
                     }
+
+                    $escuela_id_reserva = isset($old_plazas[$semana_label]['escuela_id'])
+                        ? absint($old_plazas[$semana_label]['escuela_id'])
+                        : 0;
+
                     // Guardamos los campos (horario, acogida y beca) de la reserva
                     $nuevo_plazas[$nuevo_label] = [
                         'horario' => sanitize_text_field($datos_semana['horario'] ?? ''),
                         'acogida' => sanitize_text_field($datos_semana['acogida'] ?? ''),
                         'beca' => sanitize_text_field($datos_semana['beca'] ?? ''),
+                        'escuela_id' => $escuela_id_reserva,
                     ];
-                }
-
-                // 2. Obtenemos el array antiguo guardado en el pedido
-                $old_plazas = $pedido->get_meta('plazas_reservadas');
-                if (!is_array($old_plazas)) {
-                    $old_plazas = [];
                 }
 
                 // 3. Calculamos qué semanas se han "removido" (cambiadas) y cuáles se han "agregado"
@@ -82,79 +88,71 @@ if (isset($_POST['guardar_cambios'])) {
                 $keys_removed = array_diff($old_keys, $new_keys); // semanas antiguas que ya no están
                 $keys_added = array_diff($new_keys, $old_keys);   // nuevas semanas que se han agregado
 
-                // Diccionario para convertir el nombre de la semana al ID (basado en lo que usas en descontar_plazas)
-                $idSemana = array(
-                    '25 al 27 de juny' => 1,
-                    '30 de juny al 4 de juliol' => 2,
-                    '7 al 11 de juliol' => 3,
-                    '14 al 18 de juliol' => 4,
-                    '21 al 25 de juliol' => 5,
-                    '28 de juliol al 1 agost' => 6,
-                    '25 al 27 de junio' => 1,
-                    '30 de junio al 4 de julio' => 2,
-                    '7 al 11 de julio' => 3,
-                    '14 al 18 de julio' => 4,
-                    '21 al 25 de julio' => 5,
-                    '28 de julio al 1 agosto' => 6,
-                    '28 de julio al 1 de agosto' => 6,
-                    '28 de juliol al 1 de agost' => 6,      
-                              );
-
                 global $wpdb;
+                $tabla_horarios = $wpdb->prefix . 'horarios_semana';
                 // 4. Para cada semana que se ha removido (cambio de semana), se reponen la plaza
                 foreach ($keys_removed as $old_key) {
-                    if (isset($idSemana[$old_key])) {
-                        $semana_id = $idSemana[$old_key];
-                        // Obtenemos el tipo de horario que estaba reservado en la semana antigua
-                        $old_datos = $old_plazas[$old_key];
-                        $tipo = $old_datos['horario'];
+                    $old_datos = $old_plazas[$old_key] ?? [];
+                    $escuela_id = isset($old_datos['escuela_id']) ? absint($old_datos['escuela_id']) : null;
+                    $semana_id = skc_obtener_semana_id_por_nombre($old_key, $escuela_id);
 
-                        // Buscamos el registro en wp_horarios_semana
-                        $horario = $wpdb->get_row($wpdb->prepare(
-                            "SELECT id, plazas, plazas_reservadas FROM wp_horarios_semana WHERE semana_id = %d AND tipo_horario = %s",
-                            $semana_id,
-                            $tipo
-                        ));
-                        if ($horario) {
-                            // Reponer: incrementar plazas y decrementar plazas_reservadas
-                            $nuevas_plazas = $horario->plazas + 1;
-                            $nuevas_reservas = max(0, $horario->plazas_reservadas - 1);
-                            $wpdb->update(
-                                'wp_horarios_semana',
-                                ['plazas' => $nuevas_plazas, 'plazas_reservadas' => $nuevas_reservas],
-                                ['id' => $horario->id]
-                            );
-                            error_log("Repuesta plaza en semana '$old_key' (ID: {$horario->id}): Plazas: $nuevas_plazas, Reservadas: $nuevas_reservas");
-                        }
+                    if (!$semana_id) {
+                        error_log("No se pudo resolver la semana antigua '$old_key' al editar el pedido.");
+                        continue;
+                    }
+
+                    // Obtenemos el tipo de horario que estaba reservado en la semana antigua
+                    $tipo = $old_datos['horario'];
+
+                    $horario = $wpdb->get_row($wpdb->prepare(
+                        "SELECT id, plazas, plazas_reservadas FROM {$tabla_horarios} WHERE semana_id = %d AND tipo_horario = %s",
+                        $semana_id,
+                        $tipo
+                    ));
+                    if ($horario) {
+                        // Reponer: incrementar plazas y decrementar plazas_reservadas
+                        $nuevas_plazas = $horario->plazas + 1;
+                        $nuevas_reservas = max(0, $horario->plazas_reservadas - 1);
+                        $wpdb->update(
+                            $tabla_horarios,
+                            ['plazas' => $nuevas_plazas, 'plazas_reservadas' => $nuevas_reservas],
+                            ['id' => $horario->id]
+                        );
+                        error_log("Repuesta plaza en semana '$old_key' (ID: {$horario->id}): Plazas: $nuevas_plazas, Reservadas: $nuevas_reservas");
                     }
                 }
 
                 // 5. Para cada nueva semana agregada, se descuenta la plaza
                 foreach ($keys_added as $new_key) {
-                    if (isset($idSemana[$new_key])) {
-                        $semana_id = $idSemana[$new_key];
-                        $new_datos = $nuevo_plazas[$new_key];
-                        $tipo = $new_datos['horario'];
+                    $new_datos = $nuevo_plazas[$new_key];
+                    $escuela_id = isset($new_datos['escuela_id']) ? absint($new_datos['escuela_id']) : null;
+                    $semana_id = skc_obtener_semana_id_por_nombre($new_key, $escuela_id);
 
-                        $horario = $wpdb->get_row($wpdb->prepare(
-                            "SELECT id, plazas, plazas_reservadas FROM wp_horarios_semana WHERE semana_id = %d AND tipo_horario = %s",
-                            $semana_id,
-                            $tipo
-                        ));
-                        if ($horario) {
-                            // Verificar disponibilidad (opcional)
-                            if ($horario->plazas > 0) {
-                                $nuevas_plazas = $horario->plazas - 1;
-                                $nuevas_reservas = $horario->plazas_reservadas + 1;
-                                $wpdb->update(
-                                    'wp_horarios_semana',
-                                    ['plazas' => $nuevas_plazas, 'plazas_reservadas' => $nuevas_reservas],
-                                    ['id' => $horario->id]
-                                );
-                                error_log("Descontada plaza en nueva semana '$new_key' (ID: {$horario->id}): Plazas: $nuevas_plazas, Reservadas: $nuevas_reservas");
-                            } else {
-                                error_log("No hay plazas disponibles en nueva semana '$new_key' (tipo: $tipo)");
-                            }
+                    if (!$semana_id) {
+                        error_log("No se pudo resolver la semana nueva '$new_key' al editar el pedido.");
+                        continue;
+                    }
+
+                    $tipo = $new_datos['horario'];
+
+                    $horario = $wpdb->get_row($wpdb->prepare(
+                        "SELECT id, plazas, plazas_reservadas FROM {$tabla_horarios} WHERE semana_id = %d AND tipo_horario = %s",
+                        $semana_id,
+                        $tipo
+                    ));
+                    if ($horario) {
+                        // Verificar disponibilidad (opcional)
+                        if ($horario->plazas > 0) {
+                            $nuevas_plazas = $horario->plazas - 1;
+                            $nuevas_reservas = $horario->plazas_reservadas + 1;
+                            $wpdb->update(
+                                $tabla_horarios,
+                                ['plazas' => $nuevas_plazas, 'plazas_reservadas' => $nuevas_reservas],
+                                ['id' => $horario->id]
+                            );
+                            error_log("Descontada plaza en nueva semana '$new_key' (ID: {$horario->id}): Plazas: $nuevas_plazas, Reservadas: $nuevas_reservas");
+                        } else {
+                            error_log("No hay plazas disponibles en nueva semana '$new_key' (tipo: $tipo)");
                         }
                     }
                 }

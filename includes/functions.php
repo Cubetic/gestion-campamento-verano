@@ -35,27 +35,13 @@ add_action('woocommerce_checkout_process', 'validar_campos_personalizados', 10, 
 add_action('woocommerce_checkout_update_order_meta', 'capturar_datos_alumno');
 add_filter('woocommerce_add_to_cart_redirect', 'custom_add_to_cart_redirect');
 add_action('woocommerce_order_status_processing', 'descontar_plazas', 10, 1);
+add_action('woocommerce_check_cart_items', 'skc_validar_carrito_una_escuela');
 
 // Diccionario de traducción de catalán a castellano
    
 
 function descontar_plazas($order_id)
 {
-    $idSemana = array(
-        '25 al 27 de juny' => 1,
-        '30 de juny al 4 de juliol' => 2,
-        '7 al 11 de juliol' => 3,
-        '14 al 18 de juliol' => 4,
-        '21 al 25 de juliol' => 5,
-        '28 de juliol al 1 de agost' => 6,
-		'25 al 27 de junio' => 1,
-        '30 de junio al 4 de julio' => 2,
-        '7 al 11 de julio' => 3,
-        '14 al 18 de julio' => 4,
-        '21 al 25 de julio' => 5,
-        '28 de julio al 1 de agosto' => 6,
-    );
-   
     // Obtener el pedido
     $order = wc_get_order($order_id);
     if (!$order) {
@@ -71,6 +57,7 @@ function descontar_plazas($order_id)
     }
     
     global $wpdb;
+    $tabla_horarios = $wpdb->prefix . 'horarios_semana';
 
     error_log("🔄 Iniciando transacción en la base de datos...");
     $wpdb->query('START TRANSACTION');
@@ -80,14 +67,19 @@ function descontar_plazas($order_id)
             error_log("📆 Procesando la semana: $nombre_semana");
 
             $tipo = $datos['horario'];
+            $escuela_id = isset($datos['escuela_id']) ? (int) $datos['escuela_id'] : null;
             error_log("🕒 Tipo de horario: $tipo");
 
-       
-                $semana = $idSemana[$nombre_semana];
+            $semana = skc_obtener_semana_id_por_nombre($nombre_semana, $escuela_id);
+
+            if (!$semana) {
+                error_log("❌ No se encontró ID para la semana: $nombre_semana");
+                continue;
+            }
 
             // Obtener el ID del horario correspondiente
             $horario = $wpdb->get_row($wpdb->prepare(
-                "SELECT id, plazas, plazas_reservadas FROM wp_horarios_semana WHERE semana_id = %d AND tipo_horario = %s",
+                "SELECT id, plazas, plazas_reservadas FROM {$tabla_horarios} WHERE semana_id = %d AND tipo_horario = %s",
                 $semana,
                 $tipo
             ));
@@ -112,7 +104,7 @@ function descontar_plazas($order_id)
 
             // Actualizar la cantidad de plazas y reservas en la base de datos
             $resultado = $wpdb->update(
-                'wp_horarios_semana',
+                $tabla_horarios,
                 ['plazas' => $nuevas_plazas, 'plazas_reservadas' => $nuevas_reservas],
                 ['id' => $horario->id]
             );
@@ -807,12 +799,16 @@ function reservar_plazas_campamento($order): void
         $tipo = $datos_semana['horario']['tipo'];
         $acogida = $datos_semana['acogida']; // Asegúrate de que esta clave exista
         $beca = $datos_semana['beca']; // Asegúrate de que esta clave exista
+        $escuela_id = isset($datos_semana['escuela_id']) ? (int) $datos_semana['escuela_id'] : 0;
+        $product_id = isset($datos_semana['product_id']) ? (int) $datos_semana['product_id'] : 0;
 
         // Guardamos la información en un array
         $plazas_reservadas[$nombre_semana] = [
             'horario' => $tipo,
             'acogida' => $acogida,
             'beca' => $beca,
+            'escuela_id' => $escuela_id,
+            'product_id' => $product_id,
         ];
     }
 
@@ -1025,20 +1021,6 @@ function filtrar_avisos_woocommerce($message) {
 
 // Función para reponer las plazas cuando el pedido cambia a cancelado o reembolsado
 function reponer_plazas_en_pedido_cancelado( $order_id, $old_status, $new_status, $order ) {
-    $idSemana = array(
-        '25 al 27 de juny' => 1,
-        '30 de juny al 4 de juliol' => 2,
-        '7 al 11 de juliol' => 3,
-        '14 al 18 de juliol' => 4,
-        '21 al 25 de juliol' => 5,
-        '28 de juliol al 1 agost' => 6,
-		'25 al 27 de junio' => 1,
-        '30 de junio al 4 de julio' => 2,
-        '7 al 11 de julio' => 3,
-        '14 al 18 de julio' => 4,
-        '21 al 25 de julio' => 5,
-        '28 de julio al 1 agosto' => 6,
-    );
     // Si el nuevo estado es 'refunded' o 'cancelled'
     if ( in_array( $new_status, array( 'refunded', 'cancelled' ) ) ) {
         // Recuperar las plazas reservadas del pedido
@@ -1047,20 +1029,23 @@ function reponer_plazas_en_pedido_cancelado( $order_id, $old_status, $new_status
             return;
         }
         global $wpdb;
+        $tabla_horarios = $wpdb->prefix . 'horarios_semana';
         foreach ( $plazas_reservadas as $nombre_semana => $datos ) {
-            if ( ! isset( $idSemana[ $nombre_semana ] ) ) {
+            $escuela_id = isset($datos['escuela_id']) ? (int) $datos['escuela_id'] : null;
+            $semana_id = skc_obtener_semana_id_por_nombre($nombre_semana, $escuela_id);
+
+            if ( ! $semana_id ) {
                 error_log("❌ No se encontró ID para la semana: $nombre_semana");
                 continue;
             }
-            
-            $semana_id = $idSemana[ $nombre_semana ];
+
             // Se asume que el tipo de horario está en el campo 'horario'
             $tipo = isset( $datos['horario'] ) ? $datos['horario'] : '';
             
-            // Buscar el registro correspondiente en la tabla wp_horarios_semana
+            // Buscar el registro correspondiente en la tabla de horarios
             $horario = $wpdb->get_row(
                 $wpdb->prepare(
-                    "SELECT id, plazas, plazas_reservadas FROM wp_horarios_semana WHERE semana_id = %d AND tipo_horario = %s",
+                    "SELECT id, plazas, plazas_reservadas FROM {$tabla_horarios} WHERE semana_id = %d AND tipo_horario = %s",
                     $semana_id,
                     $tipo
                 )
@@ -1076,7 +1061,7 @@ function reponer_plazas_en_pedido_cancelado( $order_id, $old_status, $new_status
             $nuevas_reservas = max( 0, $horario->plazas_reservadas - 1 );
             
             $resultado = $wpdb->update(
-                'wp_horarios_semana',
+                $tabla_horarios,
                 array(
                     'plazas'             => $nuevas_plazas,
                     'plazas_reservadas'  => $nuevas_reservas,

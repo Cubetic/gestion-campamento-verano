@@ -83,9 +83,36 @@ function my_get_horarios_stock()
     global $wpdb;
     $tabla_semanas = $wpdb->prefix . 'semanas_campamento';
     $tabla_horarios = $wpdb->prefix . 'horarios_semana';
+    $tabla_escuelas = $wpdb->prefix . 'skc_escuelas';
+
+    // Permite filtrar la disponibilidad por escuela o por producto.
+    $escuela_id = isset($_POST['escuela_id']) ? absint($_POST['escuela_id']) : 0;
+    $product_id = isset($_POST['product_id']) ? absint($_POST['product_id']) : 0;
+
+    // Si llega producto y no escuela, resolvemos la escuela asociada.
+    if ($escuela_id <= 0 && $product_id > 0) {
+        $escuelas_existe = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $tabla_escuelas)) === $tabla_escuelas;
+
+        if ($escuelas_existe) {
+            $escuela_id = (int) $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT id FROM {$tabla_escuelas} WHERE producto_id = %d ORDER BY activa DESC, id ASC LIMIT 1",
+                    $product_id
+                )
+            );
+        }
+    }
+
+    $where_sql = '';
+    $where_params = [];
+
+    if ($escuela_id > 0) {
+        $where_sql = 'WHERE s.escuela_id = %d';
+        $where_params[] = $escuela_id;
+    }
 
     // Consulta para obtener todas las semanas con sus horarios y plazas disponibles  
-    $query = "  
+    $query = "
         SELECT   
             s.id AS semana_id,  
             s.semana AS nombre_semana,  
@@ -101,9 +128,14 @@ function my_get_horarios_stock()
             $tabla_semanas s  
         JOIN   
             $tabla_horarios h ON s.id = h.semana_id  
+        $where_sql
         ORDER BY   
             s.id, h.tipo_horario  
     ";
+
+    if (!empty($where_params)) {
+        $query = $wpdb->prepare($query, ...$where_params);
+    }
 
     $results = $wpdb->get_results($query, ARRAY_A);
 
@@ -151,6 +183,8 @@ function my_get_horarios_stock()
     $response = [
         'success' => true,
         'timestamp' => current_time('timestamp'),
+        'escuela_id' => $escuela_id,
+        'product_id' => $product_id,
         'disponibilidad' => $disponibilidad
     ];
 
