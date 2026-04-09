@@ -29,6 +29,7 @@ function crear_e_inicializar_tablas_campamento(): void
 		id INT NOT NULL AUTO_INCREMENT,
 		semana_id INT NOT NULL,
 		tipo_horario ENUM('mañana', 'completo') NOT NULL,
+		nombre_horario VARCHAR(120) NOT NULL DEFAULT '',
 		plazas INT NOT NULL DEFAULT 0,
 		plazas_reservadas INT NOT NULL DEFAULT 0,
 		PRIMARY KEY (id),
@@ -72,6 +73,7 @@ function crear_e_inicializar_tablas_campamento(): void
 				[
 					'semana_id' => $semana_id,
 					'tipo_horario' => 'mañana',
+					'nombre_horario' => '9:00h a 14:30h',
 					'plazas' => 60
 				]
 			);
@@ -81,6 +83,7 @@ function crear_e_inicializar_tablas_campamento(): void
 				[
 					'semana_id' => $semana_id,
 					'tipo_horario' => 'completo',
+					'nombre_horario' => '9:00h a 17:00h',
 					'plazas' => 60
 				]
 			);

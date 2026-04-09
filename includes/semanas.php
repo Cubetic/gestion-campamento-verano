@@ -104,3 +104,80 @@ function skc_obtener_semana_id_por_nombre_y_escuela(string $nombre_semana, ?int 
 
     return null;
 }
+
+/**
+ * Normaliza texto de horarios para comparaciones robustas.
+ */
+function skc_normalizar_texto_horario(string $texto): string
+{
+    $normalizado = trim(preg_replace('/\s+/u', ' ', $texto));
+    $normalizado = preg_replace('/^de\s+/iu', '', $normalizado);
+
+    if (function_exists('mb_strtolower')) {
+        $normalizado = mb_strtolower($normalizado, 'UTF-8');
+    } else {
+        $normalizado = strtolower($normalizado);
+    }
+
+    return trim($normalizado);
+}
+
+/**
+ * Resuelve el tipo_horario configurado para una semana a partir del texto visible.
+ */
+function skc_resolver_tipo_horario_por_semana(int $semana_id, string $valor_horario): ?string
+{
+    if ($semana_id <= 0 || trim($valor_horario) === '') {
+        return null;
+    }
+
+    global $wpdb;
+    $tabla_horarios = $wpdb->prefix . 'horarios_semana';
+
+    $horarios = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT tipo_horario, nombre_horario
+             FROM {$tabla_horarios}
+             WHERE semana_id = %d",
+            $semana_id
+        ),
+        ARRAY_A
+    );
+
+    if (empty($horarios)) {
+        return null;
+    }
+
+    $valor_normalizado = skc_normalizar_texto_horario($valor_horario);
+
+    foreach ($horarios as $horario) {
+        $nombre_horario = isset($horario['nombre_horario']) ? (string) $horario['nombre_horario'] : '';
+        if ($nombre_horario === '') {
+            continue;
+        }
+
+        $nombre_normalizado = skc_normalizar_texto_horario($nombre_horario);
+        if ($nombre_normalizado !== '' && $nombre_normalizado === $valor_normalizado) {
+            return isset($horario['tipo_horario']) ? (string) $horario['tipo_horario'] : null;
+        }
+    }
+
+    foreach ($horarios as $horario) {
+        $nombre_horario = isset($horario['nombre_horario']) ? (string) $horario['nombre_horario'] : '';
+        if ($nombre_horario === '') {
+            continue;
+        }
+
+        $nombre_normalizado = skc_normalizar_texto_horario($nombre_horario);
+        if (
+            $nombre_normalizado !== '' && (
+                strpos($valor_normalizado, $nombre_normalizado) !== false ||
+                strpos($nombre_normalizado, $valor_normalizado) !== false
+            )
+        ) {
+            return isset($horario['tipo_horario']) ? (string) $horario['tipo_horario'] : null;
+        }
+    }
+
+    return null;
+}

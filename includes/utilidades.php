@@ -259,10 +259,19 @@ function obtener_info_cart() {
                         $valor_limpio = $quitar_parentesis($valor);
                         // Determinar el tipo de horario según el contenido
                         $tipo = '';
-                        if (stripos($valor_limpio, '9:00h a 14:30h') !== false) {
-                            $tipo = 'mañana';
-                        } elseif (stripos($valor_limpio, '9:00h a 17:00h') !== false) {
-                            $tipo = 'completo';
+
+                        $semana_id = skc_obtener_semana_id_por_nombre($semana, $escuela_id);
+                        if ($semana_id) {
+                            $tipo = (string) (skc_resolver_tipo_horario_por_semana((int) $semana_id, $valor_limpio) ?? '');
+                        }
+
+                        // Fallback legacy para compatibilidad con datos/horarios historicos.
+                        if ($tipo === '') {
+                            if (stripos($valor_limpio, '9:00h a 14:30h') !== false) {
+                                $tipo = 'mañana';
+                            } elseif (stripos($valor_limpio, '9:00h a 17:00h') !== false) {
+                                $tipo = 'completo';
+                            }
                         }
 
                         $resultado['semanas'][$semana]['horario'] = array(

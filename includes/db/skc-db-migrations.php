@@ -252,6 +252,50 @@ function skc_migrar_base_datos_fase_2(): bool
 }
 
 /**
+ * Fase 3: añade nombre_horario a horarios para permitir una franja visible por semana.
+ * No cambia todavia la logica funcional del plugin.
+ */
+function skc_migrar_base_datos_fase_3(): bool
+{
+	global $wpdb;
+
+	$tabla_horarios = $wpdb->prefix . 'horarios_semana';
+
+	if (!skc_tabla_tiene_columna($tabla_horarios, 'nombre_horario')) {
+		$wpdb->query("ALTER TABLE {$tabla_horarios} ADD COLUMN nombre_horario VARCHAR(120) NOT NULL DEFAULT '' AFTER tipo_horario");
+
+		if (!empty($wpdb->last_error)) {
+			error_log('SKC Fase 3: error agregando nombre_horario: ' . $wpdb->last_error);
+			return false;
+		}
+	}
+
+	$wpdb->query(
+		"UPDATE {$tabla_horarios}
+		 SET nombre_horario = '9:00h a 14:30h'
+		 WHERE tipo_horario = 'mañana' AND (nombre_horario = '' OR nombre_horario IS NULL)"
+	);
+
+	if (!empty($wpdb->last_error)) {
+		error_log('SKC Fase 3: error rellenando nombre_horario para mañana: ' . $wpdb->last_error);
+		return false;
+	}
+
+	$wpdb->query(
+		"UPDATE {$tabla_horarios}
+		 SET nombre_horario = '9:00h a 17:00h'
+		 WHERE tipo_horario = 'completo' AND (nombre_horario = '' OR nombre_horario IS NULL)"
+	);
+
+	if (!empty($wpdb->last_error)) {
+		error_log('SKC Fase 3: error rellenando nombre_horario para completo: ' . $wpdb->last_error);
+		return false;
+	}
+
+	return true;
+}
+
+/**
  * Ejecuta migraciones una sola vez por version de esquema.
  */
 function skc_ejecutar_migraciones(): void
@@ -276,6 +320,14 @@ function skc_ejecutar_migraciones(): void
 			return;
 		}
 		$version_actual = '1.2.0';
+	}
+
+	if (version_compare($version_actual, '1.3.0', '<')) {
+		$resultado_fase_3 = skc_migrar_base_datos_fase_3();
+		if (!$resultado_fase_3) {
+			return;
+		}
+		$version_actual = '1.3.0';
 	}
 
 	if (version_compare($version_actual, SKC_DB_SCHEMA_VERSION, '>=')) {

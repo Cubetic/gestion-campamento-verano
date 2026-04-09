@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
 }
 
 define('IMG_URL', plugin_dir_url(__FILE__) . 'assets/images/');
-define('SKC_DB_SCHEMA_VERSION', '1.2.0');
+define('SKC_DB_SCHEMA_VERSION', '1.3.0');
 require_once plugin_dir_path(__FILE__) . './includes/db/skc-db-schema.php';
 require_once plugin_dir_path(__FILE__) . './includes/db/skc-db-migrations.php';
 require_once plugin_dir_path(__FILE__) . './includes/semanas.php';

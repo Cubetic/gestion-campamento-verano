@@ -97,12 +97,18 @@ function skc_admin_escuelas_page(): void
         $escuela_id_semana = absint($_POST['escuela_id_semana'] ?? 0);
         $semana_es = sanitize_text_field($_POST['semana'] ?? '');
         $semana_ca = sanitize_text_field($_POST['semana_ca'] ?? '');
+        $nombre_horario_manana = sanitize_text_field($_POST['nombre_horario_manana'] ?? '9:00h a 14:30h');
+        $nombre_horario_completo = sanitize_text_field($_POST['nombre_horario_completo'] ?? '9:00h a 17:00h');
         $plazas_manana = max(0, absint($_POST['plazas_manana'] ?? 0));
         $plazas_completo = max(0, absint($_POST['plazas_completo'] ?? 0));
         $plazas_totales = $plazas_manana + $plazas_completo;
 
         if ($escuela_id_semana <= 0 || $semana_es === '') {
             echo '<div class="notice notice-error is-dismissible"><p>Debes indicar escuela y semana (ES).</p></div>';
+        } elseif ($nombre_horario_manana === '' || $nombre_horario_completo === '') {
+            echo '<div class="notice notice-error is-dismissible"><p>Debes indicar la franja de mañana y la franja de completo.</p></div>';
+        } elseif (strcasecmp($nombre_horario_manana, $nombre_horario_completo) === 0) {
+            echo '<div class="notice notice-error is-dismissible"><p>Los horarios de mañana y completo no pueden tener exactamente el mismo texto.</p></div>';
         } else {
             if ($semana_id > 0) {
                 $resultado = $wpdb->update(
@@ -146,18 +152,20 @@ function skc_admin_escuelas_page(): void
             if ($semana_id > 0) {
                 // Mantiene modelo actual: dos horarios base para compatibilidad con el plugin.
                 $wpdb->query($wpdb->prepare(
-                    "INSERT INTO {$tabla_horarios} (semana_id, tipo_horario, tipo_horario_ca, plazas, plazas_reservadas)
-                     VALUES (%d, 'mañana', 'mati', %d, 0)
-                     ON DUPLICATE KEY UPDATE plazas = VALUES(plazas)",
+                    "INSERT INTO {$tabla_horarios} (semana_id, tipo_horario, tipo_horario_ca, nombre_horario, plazas, plazas_reservadas)
+                     VALUES (%d, 'mañana', 'mati', %s, %d, 0)
+                     ON DUPLICATE KEY UPDATE nombre_horario = VALUES(nombre_horario), plazas = VALUES(plazas)",
                     $semana_id,
+                    $nombre_horario_manana,
                     $plazas_manana
                 ));
 
                 $wpdb->query($wpdb->prepare(
-                    "INSERT INTO {$tabla_horarios} (semana_id, tipo_horario, tipo_horario_ca, plazas, plazas_reservadas)
-                     VALUES (%d, 'completo', 'complet', %d, 0)
-                     ON DUPLICATE KEY UPDATE plazas = VALUES(plazas)",
+                    "INSERT INTO {$tabla_horarios} (semana_id, tipo_horario, tipo_horario_ca, nombre_horario, plazas, plazas_reservadas)
+                     VALUES (%d, 'completo', 'complet', %s, %d, 0)
+                     ON DUPLICATE KEY UPDATE nombre_horario = VALUES(nombre_horario), plazas = VALUES(plazas)",
                     $semana_id,
+                    $nombre_horario_completo,
                     $plazas_completo
                 ));
             }
@@ -216,7 +224,9 @@ function skc_admin_escuelas_page(): void
         $semana_editar = $wpdb->get_row(
             $wpdb->prepare(
                 "SELECT s.*,
+                        (SELECT nombre_horario FROM {$tabla_horarios} WHERE semana_id = s.id AND tipo_horario = 'mañana') AS nombre_horario_manana,
                         (SELECT plazas FROM {$tabla_horarios} WHERE semana_id = s.id AND tipo_horario = 'mañana') AS plazas_manana,
+                        (SELECT nombre_horario FROM {$tabla_horarios} WHERE semana_id = s.id AND tipo_horario = 'completo') AS nombre_horario_completo,
                         (SELECT plazas FROM {$tabla_horarios} WHERE semana_id = s.id AND tipo_horario = 'completo') AS plazas_completo
                  FROM {$tabla_semanas} s
                  WHERE s.id = %d",
@@ -234,7 +244,9 @@ function skc_admin_escuelas_page(): void
         $semanas_escuela = $wpdb->get_results(
             $wpdb->prepare(
                 "SELECT s.*,
+                        (SELECT nombre_horario FROM {$tabla_horarios} WHERE semana_id = s.id AND tipo_horario = 'mañana') AS nombre_horario_manana,
                         (SELECT plazas FROM {$tabla_horarios} WHERE semana_id = s.id AND tipo_horario = 'mañana') AS plazas_manana,
+                        (SELECT nombre_horario FROM {$tabla_horarios} WHERE semana_id = s.id AND tipo_horario = 'completo') AS nombre_horario_completo,
                         (SELECT plazas FROM {$tabla_horarios} WHERE semana_id = s.id AND tipo_horario = 'completo') AS plazas_completo,
                         (SELECT plazas_reservadas FROM {$tabla_horarios} WHERE semana_id = s.id AND tipo_horario = 'mañana') AS reservadas_manana,
                         (SELECT plazas_reservadas FROM {$tabla_horarios} WHERE semana_id = s.id AND tipo_horario = 'completo') AS reservadas_completo
@@ -380,8 +392,14 @@ function skc_admin_escuelas_page(): void
                                 <td><?php echo esc_html($semana_row->id); ?></td>
                                 <td><?php echo esc_html($semana_row->semana); ?></td>
                                 <td><?php echo esc_html($semana_row->semana_ca ?: '-'); ?></td>
-                                <td><?php echo esc_html((int) ($semana_row->plazas_manana ?? 0)); ?> / res. <?php echo esc_html((int) ($semana_row->reservadas_manana ?? 0)); ?></td>
-                                <td><?php echo esc_html((int) ($semana_row->plazas_completo ?? 0)); ?> / res. <?php echo esc_html((int) ($semana_row->reservadas_completo ?? 0)); ?></td>
+                                <td>
+                                    <?php echo esc_html((int) ($semana_row->plazas_manana ?? 0)); ?> / res. <?php echo esc_html((int) ($semana_row->reservadas_manana ?? 0)); ?>
+                                    <div style="margin-top:4px; color:#50575e; font-size:12px;"><?php echo esc_html($semana_row->nombre_horario_manana ?: '9:00h a 14:30h'); ?></div>
+                                </td>
+                                <td>
+                                    <?php echo esc_html((int) ($semana_row->plazas_completo ?? 0)); ?> / res. <?php echo esc_html((int) ($semana_row->reservadas_completo ?? 0)); ?>
+                                    <div style="margin-top:4px; color:#50575e; font-size:12px;"><?php echo esc_html($semana_row->nombre_horario_completo ?: '9:00h a 17:00h'); ?></div>
+                                </td>
                                 <td><?php echo esc_html((int) $semana_row->plazas_totales); ?></td>
                                 <td>
                                     <a class="button button-small" href="<?php echo esc_url(add_query_arg(['page' => 'escuelas', 'escuela_gestion_id' => (int) $escuela_gestion_id, 'editar_semana' => (int) $semana_row->id], admin_url('admin.php'))); ?>">Editar</a>
@@ -447,8 +465,16 @@ function skc_admin_escuelas_page(): void
                                 <td><input type="text" name="semana_ca" id="semana_ca" class="regular-text" value="<?php echo esc_attr($semana_editar->semana_ca ?? ''); ?>"></td>
                             </tr>
                             <tr>
+                                <th scope="row"><label for="nombre_horario_manana">Franja manana</label></th>
+                                <td><input type="text" name="nombre_horario_manana" id="nombre_horario_manana" class="regular-text" required value="<?php echo esc_attr($semana_editar->nombre_horario_manana ?? '9:00h a 14:30h'); ?>"></td>
+                            </tr>
+                            <tr>
                                 <th scope="row"><label for="plazas_manana">Plazas manana</label></th>
                                 <td><input type="number" min="0" name="plazas_manana" id="plazas_manana" class="small-text" required value="<?php echo esc_attr((int) ($semana_editar->plazas_manana ?? 0)); ?>"></td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><label for="nombre_horario_completo">Franja completo</label></th>
+                                <td><input type="text" name="nombre_horario_completo" id="nombre_horario_completo" class="regular-text" required value="<?php echo esc_attr($semana_editar->nombre_horario_completo ?? '9:00h a 17:00h'); ?>"></td>
                             </tr>
                             <tr>
                                 <th scope="row"><label for="plazas_completo">Plazas completo</label></th>
