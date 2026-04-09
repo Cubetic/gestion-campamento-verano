@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Gestion de plazas de campamento de verano
  * Description: Muestra una tabla con los datos de las reservas realizadas por los alumnos para las escuelas Duran I Bas".
- * Version: 1.0.1
+ * Version: 1.0.2
  * Author: Nico Demarchi
  */
 
@@ -21,6 +21,7 @@ require_once plugin_dir_path(__FILE__) . './includes/descuentos.php';
 require_once plugin_dir_path(__FILE__) . './includes/cron.php';
 require_once plugin_dir_path(__FILE__) . './includes/admin/dashboard_stock.php';
 require_once plugin_dir_path(__FILE__) . './includes/admin/dashboard_escuelas.php';
+require_once plugin_dir_path(__FILE__) . './includes/admin/dashboard_producto.php';
 require_once plugin_dir_path(__FILE__) . './includes/admin/dashboard_carnet.php';
 require_once plugin_dir_path(__FILE__) . './includes/admin/dashboard_diplomas.php';
 
@@ -66,6 +67,16 @@ function reservas_menu_admin()
         'escuelas',
         'skc_admin_escuelas_page'
     );
+
+    add_submenu_page(
+        'SportyKidsCamp',
+        'Creación de Producto',
+        'Crear Producto',
+        'manage_woocommerce',
+        'crear-producto',
+        'skc_admin_crear_producto_page'
+    );
+
     // Submenú para generar carnets en PDF
     add_submenu_page(
         'SportyKidsCamp',   // Slug del menú principal

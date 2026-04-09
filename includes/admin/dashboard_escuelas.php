@@ -348,7 +348,10 @@ function skc_admin_escuelas_page(): void
                         </tr>
                         <tr>
                             <th scope="row"><label for="producto_id">Producto WooCommerce (ID)</label></th>
-                            <td><input type="number" min="1" name="producto_id" id="producto_id" class="small-text" value="<?php echo esc_attr($escuela_editar->producto_id ?? ''); ?>"></td>
+                            <td>
+                                <input type="number" min="1" name="producto_id" id="producto_id" class="small-text" value="<?php echo esc_attr($escuela_editar->producto_id ?? ''); ?>">
+                                <p class="description">ID del producto asociado en WooCommerce.</p>
+                            </td>
                         </tr>
                         <tr>
                             <th scope="row">Activa</th>
@@ -463,15 +466,24 @@ function skc_admin_escuelas_page(): void
                             </tr>
                             <tr>
                                 <th scope="row"><label for="semana">Semana (ES)</label></th>
-                                <td><input type="text" name="semana" id="semana" class="regular-text" required value="<?php echo esc_attr($semana_editar->semana ?? ''); ?>"></td>
+                                <td>
+                                    <input type="text" name="semana" id="semana" class="regular-text" required value="<?php echo esc_attr($semana_editar->semana ?? ''); ?>">
+                                    <p class="description">Formato recomendado: ej. 9 al 15 de abril o 31 de junio al 4 de julio</p>
+                                </td>
                             </tr>
                             <tr>
                                 <th scope="row"><label for="semana_ca">Semana (CA)</label></th>
-                                <td><input type="text" name="semana_ca" id="semana_ca" class="regular-text" value="<?php echo esc_attr($semana_editar->semana_ca ?? ''); ?>"></td>
+                                <td>
+                                    <input type="text" name="semana_ca" id="semana_ca" class="regular-text" value="<?php echo esc_attr($semana_editar->semana_ca ?? ''); ?>">
+                                    <p class="description">Format recomanat: ex. 9 al 15 de abril o 31 de juny al 4 de juliol</p>
+                                </td>
                             </tr>
                             <tr>
                                 <th scope="row"><label for="nombre_horario_manana">Franja manana</label></th>
-                                <td><input type="text" name="nombre_horario_manana" id="nombre_horario_manana" class="regular-text" required value="<?php echo esc_attr($semana_editar->nombre_horario_manana ?? '9:00h a 14:30h'); ?>"></td>
+                                <td>
+                                    <input type="text" name="nombre_horario_manana" id="nombre_horario_manana" class="regular-text" required value="<?php echo esc_attr($semana_editar->nombre_horario_manana ?? '9:00h a 14:30h'); ?>">
+                                    <p class="description">Formato recomendado: ej. 9:00h a 14:30h</p>
+                                </td>
                             </tr>
                             <tr>
                                 <th scope="row"><label for="plazas_manana">Plazas manana</label></th>
@@ -479,7 +491,10 @@ function skc_admin_escuelas_page(): void
                             </tr>
                             <tr>
                                 <th scope="row"><label for="nombre_horario_completo">Franja completo</label></th>
-                                <td><input type="text" name="nombre_horario_completo" id="nombre_horario_completo" class="regular-text" required value="<?php echo esc_attr($semana_editar->nombre_horario_completo ?? '9:00h a 17:00h'); ?>"></td>
+                                <td>
+                                    <input type="text" name="nombre_horario_completo" id="nombre_horario_completo" class="regular-text" required value="<?php echo esc_attr($semana_editar->nombre_horario_completo ?? '9:00h a 17:00h'); ?>">
+                                    <p class="description">Formato recomendado: ej. 9:00h a 17:00h</p>
+                                </td>
                             </tr>
                             <tr>
                                 <th scope="row"><label for="plazas_completo">Plazas completo</label></th>
