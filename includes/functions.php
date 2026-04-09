@@ -859,6 +859,14 @@ function reservar_plazas_campamento($order): void
                         } elseif (stripos($valor_limpio, '9:00h a 17:00h') !== false) {
                             $tipo = 'completo';
                         }
+
+                        if ($tipo !== '') {
+                            error_log('SKC Horarios: fallback legacy aplicado en reservar_plazas_campamento para semana "' . $semana . '".');
+                        }
+                    }
+
+                    if ($tipo === '') {
+                        error_log('SKC Horarios: no se pudo resolver tipo_horario en reservar_plazas_campamento para semana "' . $semana . '" y valor "' . $valor_limpio . '".');
                     }
                     $plazas_reservadas[$semana]['horario'] = $tipo;
 

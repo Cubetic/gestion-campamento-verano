@@ -118,6 +118,7 @@ function my_get_horarios_stock()
             s.semana AS nombre_semana,  
             s.plazas_totales,  
             h.tipo_horario,  
+            h.nombre_horario,
             h.plazas AS plazas_disponibles,  
             CASE   
                 WHEN h.plazas <= 0 THEN 'completo'  
@@ -171,6 +172,7 @@ function my_get_horarios_stock()
         }
 
         $disponibilidad[$semana_id]['horarios'][$row['tipo_horario']] = [
+            'nombre_horario' => $row['nombre_horario'] ?? '',
             'plazas' => $row['plazas_disponibles'],
             'estado' => $row['estado']
         ];

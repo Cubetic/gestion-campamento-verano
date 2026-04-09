@@ -272,6 +272,14 @@ function obtener_info_cart() {
                             } elseif (stripos($valor_limpio, '9:00h a 17:00h') !== false) {
                                 $tipo = 'completo';
                             }
+
+                            if ($tipo !== '') {
+                                error_log('SKC Horarios: fallback legacy aplicado en obtener_info_cart para semana "' . $semana . '".');
+                            }
+                        }
+
+                        if ($tipo === '') {
+                            error_log('SKC Horarios: no se pudo resolver tipo_horario en obtener_info_cart para semana "' . $semana . '" y valor "' . $valor_limpio . '".');
                         }
 
                         $resultado['semanas'][$semana]['horario'] = array(

@@ -150,6 +150,9 @@ function skc_resolver_tipo_horario_por_semana(int $semana_id, string $valor_hora
 
     $valor_normalizado = skc_normalizar_texto_horario($valor_horario);
 
+    $coincidencias_exactas = [];
+    $coincidencias_parciales = [];
+
     foreach ($horarios as $horario) {
         $nombre_horario = isset($horario['nombre_horario']) ? (string) $horario['nombre_horario'] : '';
         if ($nombre_horario === '') {
@@ -158,8 +161,17 @@ function skc_resolver_tipo_horario_por_semana(int $semana_id, string $valor_hora
 
         $nombre_normalizado = skc_normalizar_texto_horario($nombre_horario);
         if ($nombre_normalizado !== '' && $nombre_normalizado === $valor_normalizado) {
-            return isset($horario['tipo_horario']) ? (string) $horario['tipo_horario'] : null;
+            $coincidencias_exactas[] = isset($horario['tipo_horario']) ? (string) $horario['tipo_horario'] : '';
         }
+    }
+
+    $coincidencias_exactas = array_values(array_unique(array_filter($coincidencias_exactas)));
+    if (count($coincidencias_exactas) === 1) {
+        return $coincidencias_exactas[0];
+    }
+    if (count($coincidencias_exactas) > 1) {
+        error_log('SKC Horarios: coincidencia exacta ambigua para semana_id=' . $semana_id . ' y valor="' . $valor_horario . '"');
+        return null;
     }
 
     foreach ($horarios as $horario) {
@@ -175,8 +187,17 @@ function skc_resolver_tipo_horario_por_semana(int $semana_id, string $valor_hora
                 strpos($nombre_normalizado, $valor_normalizado) !== false
             )
         ) {
-            return isset($horario['tipo_horario']) ? (string) $horario['tipo_horario'] : null;
+            $coincidencias_parciales[] = isset($horario['tipo_horario']) ? (string) $horario['tipo_horario'] : '';
         }
+    }
+
+    $coincidencias_parciales = array_values(array_unique(array_filter($coincidencias_parciales)));
+    if (count($coincidencias_parciales) === 1) {
+        return $coincidencias_parciales[0];
+    }
+    if (count($coincidencias_parciales) > 1) {
+        error_log('SKC Horarios: coincidencia parcial ambigua para semana_id=' . $semana_id . ' y valor="' . $valor_horario . '"');
+        return null;
     }
 
     return null;

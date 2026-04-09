@@ -99,15 +99,20 @@ function skc_admin_escuelas_page(): void
         $semana_ca = sanitize_text_field($_POST['semana_ca'] ?? '');
         $nombre_horario_manana = sanitize_text_field($_POST['nombre_horario_manana'] ?? '9:00h a 14:30h');
         $nombre_horario_completo = sanitize_text_field($_POST['nombre_horario_completo'] ?? '9:00h a 17:00h');
+        $nombre_horario_manana = trim(preg_replace('/\s+/u', ' ', (string) $nombre_horario_manana));
+        $nombre_horario_completo = trim(preg_replace('/\s+/u', ' ', (string) $nombre_horario_completo));
+
+        $nombre_horario_manana_normalizado = skc_normalizar_texto_horario($nombre_horario_manana);
+        $nombre_horario_completo_normalizado = skc_normalizar_texto_horario($nombre_horario_completo);
         $plazas_manana = max(0, absint($_POST['plazas_manana'] ?? 0));
         $plazas_completo = max(0, absint($_POST['plazas_completo'] ?? 0));
         $plazas_totales = $plazas_manana + $plazas_completo;
 
         if ($escuela_id_semana <= 0 || $semana_es === '') {
             echo '<div class="notice notice-error is-dismissible"><p>Debes indicar escuela y semana (ES).</p></div>';
-        } elseif ($nombre_horario_manana === '' || $nombre_horario_completo === '') {
+        } elseif ($nombre_horario_manana_normalizado === '' || $nombre_horario_completo_normalizado === '') {
             echo '<div class="notice notice-error is-dismissible"><p>Debes indicar la franja de mañana y la franja de completo.</p></div>';
-        } elseif (strcasecmp($nombre_horario_manana, $nombre_horario_completo) === 0) {
+        } elseif ($nombre_horario_manana_normalizado === $nombre_horario_completo_normalizado) {
             echo '<div class="notice notice-error is-dismissible"><p>Los horarios de mañana y completo no pueden tener exactamente el mismo texto.</p></div>';
         } else {
             if ($semana_id > 0) {
