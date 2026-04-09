@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Gestion de plazas de campamento de verano
  * Description: Muestra una tabla con los datos de las reservas realizadas por los alumnos para las escuelas Duran I Bas".
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: Nico Demarchi
  */
 
@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
 }
 
 define('IMG_URL', plugin_dir_url(__FILE__) . 'assets/images/');
-define('SKC_DB_SCHEMA_VERSION', '1.1.0');
+define('SKC_DB_SCHEMA_VERSION', '1.2.0');
 require_once plugin_dir_path(__FILE__) . './includes/db/skc-db-schema.php';
 require_once plugin_dir_path(__FILE__) . './includes/db/skc-db-migrations.php';
 require_once plugin_dir_path(__FILE__) . './includes/semanas.php';

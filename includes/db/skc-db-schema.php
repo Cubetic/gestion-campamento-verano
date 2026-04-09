@@ -21,7 +21,7 @@ function crear_e_inicializar_tablas_campamento(): void
 		semana VARCHAR(50) NOT NULL,
 		plazas_totales INT NOT NULL DEFAULT 0,
 		PRIMARY KEY (id),
-		UNIQUE KEY semana (semana)
+		KEY semana (semana)
 	) $charset_collate;";
 
 	// Crear tabla de horarios por semana.

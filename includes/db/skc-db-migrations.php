@@ -20,6 +20,21 @@ function skc_tabla_tiene_columna(string $tabla, string $columna): bool
 }
 
 /**
+ * Verifica si una tabla contiene un indice por nombre.
+ */
+function skc_tabla_tiene_indice(string $tabla, string $indice): bool
+{
+	global $wpdb;
+
+	$sql = $wpdb->prepare(
+		"SHOW INDEX FROM {$tabla} WHERE Key_name = %s",
+		$indice
+	);
+
+	return (bool) $wpdb->get_var($sql);
+}
+
+/**
  * Ejecuta la migracion de la Fase 1 para soporte multi-escuela y bilingue.
  */
 function skc_migrar_base_datos_fase_1(): bool
@@ -187,6 +202,56 @@ function skc_migrar_base_datos_fase_1(): bool
 }
 
 /**
+ * Fase 2: permite repetir etiqueta de semana entre escuelas distintas.
+ * Mantiene la unicidad solo dentro de cada escuela.
+ */
+function skc_migrar_base_datos_fase_2(): bool
+{
+	global $wpdb;
+
+	$tabla_semanas = $wpdb->prefix . 'semanas_campamento';
+
+	if (!skc_tabla_tiene_columna($tabla_semanas, 'escuela_id')) {
+		error_log('SKC Fase 2: falta columna escuela_id en semanas.');
+		return false;
+	}
+
+	$duplicados_misma_escuela = (int) $wpdb->get_var(
+		"SELECT COUNT(*) FROM (
+			SELECT escuela_id, semana, COUNT(*) AS total
+			FROM {$tabla_semanas}
+			GROUP BY escuela_id, semana
+			HAVING COUNT(*) > 1
+		) t"
+	);
+
+	if ($duplicados_misma_escuela > 0) {
+		error_log('SKC Fase 2: existen semanas duplicadas dentro de la misma escuela. Revisar antes de crear UNIQUE(escuela_id, semana).');
+		return false;
+	}
+
+	if (skc_tabla_tiene_indice($tabla_semanas, 'semana')) {
+		$wpdb->query("ALTER TABLE {$tabla_semanas} DROP INDEX semana");
+
+		if (!empty($wpdb->last_error)) {
+			error_log('SKC Fase 2: error eliminando indice unico semana: ' . $wpdb->last_error);
+			return false;
+		}
+	}
+
+	if (!skc_tabla_tiene_indice($tabla_semanas, 'uniq_escuela_semana')) {
+		$wpdb->query("ALTER TABLE {$tabla_semanas} ADD UNIQUE KEY uniq_escuela_semana (escuela_id, semana)");
+
+		if (!empty($wpdb->last_error)) {
+			error_log('SKC Fase 2: error creando indice uniq_escuela_semana: ' . $wpdb->last_error);
+			return false;
+		}
+	}
+
+	return true;
+}
+
+/**
  * Ejecuta migraciones una sola vez por version de esquema.
  */
 function skc_ejecutar_migraciones(): void
@@ -197,9 +262,23 @@ function skc_ejecutar_migraciones(): void
 		return;
 	}
 
-	$resultado = skc_migrar_base_datos_fase_1();
+	if (version_compare($version_actual, '1.1.0', '<')) {
+		$resultado_fase_1 = skc_migrar_base_datos_fase_1();
+		if (!$resultado_fase_1) {
+			return;
+		}
+		$version_actual = '1.1.0';
+	}
 
-	if ($resultado) {
+	if (version_compare($version_actual, '1.2.0', '<')) {
+		$resultado_fase_2 = skc_migrar_base_datos_fase_2();
+		if (!$resultado_fase_2) {
+			return;
+		}
+		$version_actual = '1.2.0';
+	}
+
+	if (version_compare($version_actual, SKC_DB_SCHEMA_VERSION, '>=')) {
 		update_option('skc_db_schema_version', SKC_DB_SCHEMA_VERSION);
 	}
 }
