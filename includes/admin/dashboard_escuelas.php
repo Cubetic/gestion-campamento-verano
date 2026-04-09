@@ -250,42 +250,6 @@ function skc_admin_escuelas_page(): void
     <div class="wrap">
         <h1>Escuelas</h1>
         <p>Gestiona las escuelas disponibles. En esta fase se gestiona el catalogo base de escuelas para vincular semanas y productos.</p>
-
-        <h2><?php echo $escuela_editar ? 'Editar escuela' : 'Nueva escuela'; ?></h2>
-        <form method="post" action="">
-            <?php wp_nonce_field('skc_guardar_escuela_nonce'); ?>
-            <input type="hidden" name="skc_guardar_escuela" value="1">
-            <input type="hidden" name="escuela_id" value="<?php echo esc_attr($escuela_editar->id ?? 0); ?>">
-
-            <table class="form-table" role="presentation">
-                <tbody>
-                    <tr>
-                        <th scope="row"><label for="nombre">Nombre (ES)</label></th>
-                        <td><input type="text" name="nombre" id="nombre" class="regular-text" required value="<?php echo esc_attr($escuela_editar->nombre ?? ''); ?>"></td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><label for="nombre_ca">Nombre (CA)</label></th>
-                        <td><input type="text" name="nombre_ca" id="nombre_ca" class="regular-text" value="<?php echo esc_attr($escuela_editar->nombre_ca ?? ''); ?>"></td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><label for="slug">Slug</label></th>
-                        <td><input type="text" name="slug" id="slug" class="regular-text" value="<?php echo esc_attr($escuela_editar->slug ?? ''); ?>"><p class="description">Si lo dejas vacio, se genera automaticamente desde el nombre.</p></td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><label for="producto_id">Producto WooCommerce (ID)</label></th>
-                        <td><input type="number" min="1" name="producto_id" id="producto_id" class="small-text" value="<?php echo esc_attr($escuela_editar->producto_id ?? ''); ?>"></td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Activa</th>
-                        <td><label><input type="checkbox" name="activa" value="1" <?php checked((int) ($escuela_editar->activa ?? 1), 1); ?>> Escuela activa</label></td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <?php submit_button($escuela_editar ? 'Actualizar escuela' : 'Crear escuela'); ?>
-        </form>
-
-        <hr>
         <h2>Listado de escuelas</h2>
         <table class="wp-list-table widefat fixed striped">
             <thead>
@@ -329,6 +293,57 @@ function skc_admin_escuelas_page(): void
             </tbody>
         </table>
 
+        <?php
+        $mostrar_form_escuela = (bool) $escuela_editar || isset($_POST['skc_guardar_escuela']);
+        ?>
+        <p style="margin-top:14px;">
+            <button
+                type="button"
+                class="button button-primary"
+                id="skc-toggle-form-escuela"
+                data-show-text="Nueva escuela"
+                data-hide-text="Ocultar formulario de escuela"
+            >
+                <?php echo $mostrar_form_escuela ? 'Ocultar formulario de escuela' : 'Nueva escuela'; ?>
+            </button>
+        </p>
+
+        <div id="skc-form-escuela" style="display: <?php echo $mostrar_form_escuela ? 'block' : 'none'; ?>; margin-top:10px;">
+            <h3><?php echo $escuela_editar ? 'Editar escuela' : 'Nueva escuela'; ?></h3>
+            <form method="post" action="">
+                <?php wp_nonce_field('skc_guardar_escuela_nonce'); ?>
+                <input type="hidden" name="skc_guardar_escuela" value="1">
+                <input type="hidden" name="escuela_id" value="<?php echo esc_attr($escuela_editar->id ?? 0); ?>">
+
+                <table class="form-table" role="presentation">
+                    <tbody>
+                        <tr>
+                            <th scope="row"><label for="nombre">Nombre (ES)</label></th>
+                            <td><input type="text" name="nombre" id="nombre" class="regular-text" required value="<?php echo esc_attr($escuela_editar->nombre ?? ''); ?>"></td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="nombre_ca">Nombre (CA)</label></th>
+                            <td><input type="text" name="nombre_ca" id="nombre_ca" class="regular-text" value="<?php echo esc_attr($escuela_editar->nombre_ca ?? ''); ?>"></td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="slug">Slug</label></th>
+                            <td><input type="text" name="slug" id="slug" class="regular-text" value="<?php echo esc_attr($escuela_editar->slug ?? ''); ?>"><p class="description">Si lo dejas vacio, se genera automaticamente desde el nombre.</p></td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="producto_id">Producto WooCommerce (ID)</label></th>
+                            <td><input type="number" min="1" name="producto_id" id="producto_id" class="small-text" value="<?php echo esc_attr($escuela_editar->producto_id ?? ''); ?>"></td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Activa</th>
+                            <td><label><input type="checkbox" name="activa" value="1" <?php checked((int) ($escuela_editar->activa ?? 1), 1); ?>> Escuela activa</label></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <?php submit_button($escuela_editar ? 'Actualizar escuela' : 'Crear escuela'); ?>
+            </form>
+        </div>
+
         <hr>
         <h2>Semanas y horarios por escuela</h2>
         <form method="get" action="" style="margin-bottom:12px;">
@@ -345,51 +360,6 @@ function skc_admin_escuelas_page(): void
         </form>
 
         <?php if ($escuela_gestion_id > 0): ?>
-            <h3><?php echo $semana_editar ? 'Editar semana' : 'Nueva semana'; ?></h3>
-            <form method="post" action="">
-                <?php wp_nonce_field('skc_guardar_semana_nonce'); ?>
-                <input type="hidden" name="skc_guardar_semana" value="1">
-                <input type="hidden" name="semana_id" value="<?php echo esc_attr($semana_editar->id ?? 0); ?>">
-
-                <table class="form-table" role="presentation">
-                    <tbody>
-                        <tr>
-                            <th scope="row"><label for="escuela_id_semana">Escuela</label></th>
-                            <td>
-                                <select name="escuela_id_semana" id="escuela_id_semana" required>
-                                    <?php foreach ($escuelas as $escuela_option): ?>
-                                        <option value="<?php echo esc_attr($escuela_option->id); ?>" <?php selected((int) ($semana_editar->escuela_id ?? $escuela_gestion_id), (int) $escuela_option->id); ?>>
-                                            <?php echo esc_html($escuela_option->nombre . ' (#' . $escuela_option->id . ')'); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="semana">Semana (ES)</label></th>
-                            <td><input type="text" name="semana" id="semana" class="regular-text" required value="<?php echo esc_attr($semana_editar->semana ?? ''); ?>"></td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="semana_ca">Semana (CA)</label></th>
-                            <td><input type="text" name="semana_ca" id="semana_ca" class="regular-text" value="<?php echo esc_attr($semana_editar->semana_ca ?? ''); ?>"></td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="plazas_manana">Plazas manana</label></th>
-                            <td><input type="number" min="0" name="plazas_manana" id="plazas_manana" class="small-text" required value="<?php echo esc_attr((int) ($semana_editar->plazas_manana ?? 0)); ?>"></td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="plazas_completo">Plazas completo</label></th>
-                            <td><input type="number" min="0" name="plazas_completo" id="plazas_completo" class="small-text" required value="<?php echo esc_attr((int) ($semana_editar->plazas_completo ?? 0)); ?>"></td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <?php submit_button($semana_editar ? 'Actualizar semana' : 'Crear semana'); ?>
-                <?php if ($semana_editar): ?>
-                    <a class="button" href="<?php echo esc_url(add_query_arg(['page' => 'escuelas', 'escuela_gestion_id' => (int) $escuela_gestion_id], admin_url('admin.php'))); ?>">Cancelar edicion</a>
-                <?php endif; ?>
-            </form>
-
             <h3 style="margin-top:24px;">Listado de semanas</h3>
             <table class="wp-list-table widefat fixed striped">
                 <thead>
@@ -431,9 +401,95 @@ function skc_admin_escuelas_page(): void
                     <?php endif; ?>
                 </tbody>
             </table>
+
+            <?php
+            $mostrar_form_semana = (bool) $semana_editar || isset($_POST['skc_guardar_semana']);
+            ?>
+            <p style="margin-top:14px;">
+                <button
+                    type="button"
+                    class="button button-primary"
+                    id="skc-toggle-form-semana"
+                    data-show-text="Nueva semana"
+                    data-hide-text="Ocultar formulario de semana"
+                >
+                    <?php echo $mostrar_form_semana ? 'Ocultar formulario de semana' : 'Nueva semana'; ?>
+                </button>
+            </p>
+
+            <div id="skc-form-semana" style="display: <?php echo $mostrar_form_semana ? 'block' : 'none'; ?>; margin-top:10px;">
+                <h3><?php echo $semana_editar ? 'Editar semana' : 'Nueva semana'; ?></h3>
+                <form method="post" action="">
+                    <?php wp_nonce_field('skc_guardar_semana_nonce'); ?>
+                    <input type="hidden" name="skc_guardar_semana" value="1">
+                    <input type="hidden" name="semana_id" value="<?php echo esc_attr($semana_editar->id ?? 0); ?>">
+
+                    <table class="form-table" role="presentation">
+                        <tbody>
+                            <tr>
+                                <th scope="row"><label for="escuela_id_semana">Escuela</label></th>
+                                <td>
+                                    <select name="escuela_id_semana" id="escuela_id_semana" required>
+                                        <?php foreach ($escuelas as $escuela_option): ?>
+                                            <option value="<?php echo esc_attr($escuela_option->id); ?>" <?php selected((int) ($semana_editar->escuela_id ?? $escuela_gestion_id), (int) $escuela_option->id); ?>>
+                                                <?php echo esc_html($escuela_option->nombre . ' (#' . $escuela_option->id . ')'); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><label for="semana">Semana (ES)</label></th>
+                                <td><input type="text" name="semana" id="semana" class="regular-text" required value="<?php echo esc_attr($semana_editar->semana ?? ''); ?>"></td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><label for="semana_ca">Semana (CA)</label></th>
+                                <td><input type="text" name="semana_ca" id="semana_ca" class="regular-text" value="<?php echo esc_attr($semana_editar->semana_ca ?? ''); ?>"></td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><label for="plazas_manana">Plazas manana</label></th>
+                                <td><input type="number" min="0" name="plazas_manana" id="plazas_manana" class="small-text" required value="<?php echo esc_attr((int) ($semana_editar->plazas_manana ?? 0)); ?>"></td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><label for="plazas_completo">Plazas completo</label></th>
+                                <td><input type="number" min="0" name="plazas_completo" id="plazas_completo" class="small-text" required value="<?php echo esc_attr((int) ($semana_editar->plazas_completo ?? 0)); ?>"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <?php submit_button($semana_editar ? 'Actualizar semana' : 'Crear semana'); ?>
+                    <?php if ($semana_editar): ?>
+                        <a class="button" href="<?php echo esc_url(add_query_arg(['page' => 'escuelas', 'escuela_gestion_id' => (int) $escuela_gestion_id], admin_url('admin.php'))); ?>">Cancelar edicion</a>
+                    <?php endif; ?>
+                </form>
+            </div>
         <?php else: ?>
             <div class="notice notice-warning inline"><p>Primero crea al menos una escuela para poder gestionar semanas.</p></div>
         <?php endif; ?>
+
+        <script>
+            (function () {
+                function activarToggle(buttonId, panelId) {
+                    var button = document.getElementById(buttonId);
+                    var panel = document.getElementById(panelId);
+                    if (!button || !panel) {
+                        return;
+                    }
+
+                    var showText = button.getAttribute('data-show-text') || 'Mostrar formulario';
+                    var hideText = button.getAttribute('data-hide-text') || 'Ocultar formulario';
+
+                    button.addEventListener('click', function () {
+                        var visible = panel.style.display !== 'none';
+                        panel.style.display = visible ? 'none' : 'block';
+                        button.textContent = visible ? showText : hideText;
+                    });
+                }
+
+                activarToggle('skc-toggle-form-escuela', 'skc-form-escuela');
+                activarToggle('skc-toggle-form-semana', 'skc-form-semana');
+            })();
+        </script>
     </div>
     <?php
 }
