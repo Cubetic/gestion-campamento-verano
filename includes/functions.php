@@ -28,6 +28,7 @@ add_action('woocommerce_checkout_fields', 'mostrar_campos_formulario');
 add_filter('woocommerce_checkout_fields', 'skc_remove_billing_fields_requirement');
 add_action('woocommerce_checkout_create_order', 'skc_set_tutor_data_as_billing', 10, 2);
 add_action('woocommerce_checkout_order_created', 'reservar_plazas_campamento', 10, 2);
+add_action('woocommerce_store_api_checkout_order_processed', 'reservar_plazas_campamento', 10, 1);
 
 //add_action('woocommerce_payment_complete', 'descontar_plazas', 10, 1);
 //add_action('woocommerce_thankyou', 'descontar_plazas', 10, 1);
@@ -789,33 +790,84 @@ function crear_usuarios_tutor_y_alumno($order, $data)
  */
 function reservar_plazas_campamento($order): void
 {
-    $info_semanal = obtener_info_cart();
-
     $plazas_reservadas = [];
 
-    // Recorremos cada semana
-    foreach ($info_semanal['semanas'] as $nombre_semana => $datos_semana) {
-        // Extraemos la beca, el tipo de horario y el precio base
-        $tipo = $datos_semana['horario']['tipo'];
-        $acogida = $datos_semana['acogida']; // Asegúrate de que esta clave exista
-        $beca = $datos_semana['beca']; // Asegúrate de que esta clave exista
-        $escuela_id = isset($datos_semana['escuela_id']) ? (int) $datos_semana['escuela_id'] : 0;
-        $product_id = isset($datos_semana['product_id']) ? (int) $datos_semana['product_id'] : 0;
+    // Función auxiliar para eliminar contenido entre paréntesis
+    $quitar_parentesis = function (string $texto): string {
+        return trim(preg_replace('/\s*\(.*?\)\s*/', '', $texto));
+    };
 
-        // Guardamos la información en un array
-        $plazas_reservadas[$nombre_semana] = [
-            'horario' => $tipo,
-            'acogida' => $acogida,
-            'beca' => $beca,
-            'escuela_id' => $escuela_id,
-            'product_id' => $product_id,
-        ];
+    foreach ($order->get_items() as $item) {
+        $product_id = (int) $item->get_product_id();
+        $escuela_id = (int) skc_obtener_escuela_id_por_producto($product_id);
+
+        // Leer el _wapf_meta del line item
+        $wapf_meta = $item->get_meta('_wapf_meta', true);
+        if (empty($wapf_meta) || !is_array($wapf_meta)) {
+            continue;
+        }
+
+        // Reindexar por posición para procesar igual que el carrito
+        $campos = array_values($wapf_meta);
+
+        // El primer campo debe contener las semanas
+        if (empty($campos[0]['value'])) {
+            continue;
+        }
+
+        $semanas = skc_parsear_lista_semanas((string) $campos[0]['value']);
+
+        foreach ($semanas as $semana) {
+            if (!isset($plazas_reservadas[$semana])) {
+                $plazas_reservadas[$semana] = [
+                    'horario'    => '',
+                    'acogida'    => '',
+                    'beca'       => 'No',
+                    'escuela_id' => $escuela_id,
+                    'product_id' => $product_id,
+                ];
+            }
+        }
+
+        for ($i = 1; $i < count($campos); $i++) {
+            $campo = $campos[$i];
+            if (empty($campo['label']) || empty($campo['value'])) {
+                continue;
+            }
+
+            $label = $campo['label'];
+            $valor = $campo['value'];
+
+            foreach ($semanas as $semana) {
+                if (stripos($label, $semana) === false) {
+                    continue;
+                }
+
+                if (stripos($label, 'Horario del') !== false || stripos($label, 'Horari del') !== false) {
+                    $valor_limpio = $quitar_parentesis($valor);
+                    $tipo = '';
+                    if (stripos($valor_limpio, '9:00h a 14:30h') !== false) {
+                        $tipo = 'mañana';
+                    } elseif (stripos($valor_limpio, '9:00h a 17:00h') !== false) {
+                        $tipo = 'completo';
+                    }
+                    $plazas_reservadas[$semana]['horario'] = $tipo;
+
+                } elseif (stripos($label, 'Acogida') !== false || stripos($label, 'Acollida') !== false) {
+                    $plazas_reservadas[$semana]['acogida'] = $quitar_parentesis($valor);
+
+                } elseif (stripos($label, 'Beca') !== false || stripos($valor, 'beca') !== false) {
+                    $plazas_reservadas[$semana]['beca'] = (stripos($quitar_parentesis($valor), 'solicita beca') !== false) ? 'Si' : 'No';
+                }
+            }
+        }
     }
 
-    // Actualizamos el meta del pedido utilizando el método de objeto
-    $order->update_meta_data('plazas_reservadas', $plazas_reservadas);
+    if (empty($plazas_reservadas)) {
+        return;
+    }
 
-    // Guarda los cambios en el objeto de pedido
+    $order->update_meta_data('plazas_reservadas', $plazas_reservadas);
     $order->save();
 }
 

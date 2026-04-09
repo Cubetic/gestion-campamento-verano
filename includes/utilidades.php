@@ -6,6 +6,31 @@ if (!defined('ABSPATH')) {
 }
 
 /**
+ * Parsea el valor del campo "Semanas" de WAPF.
+ * - Si es una lista de dias con mes comun (ej: "22,23,25,26 de junio"), lo mantiene como una sola semana.
+ * - En otros casos, separa por comas para mantener compatibilidad historica.
+ */
+function skc_parsear_lista_semanas(string $valor): array
+{
+    $valor = trim(preg_replace('/\s+/u', ' ', $valor));
+
+    if ($valor === '') {
+        return [];
+    }
+
+    $es_lista_dias_mismo_mes = (bool) preg_match(
+        '/^\d{1,2}(?:\s*,\s*\d{1,2})+\s+de\s+[\p{L}]+(?:\s+\d{4})?$/u',
+        $valor
+    );
+
+    if ($es_lista_dias_mismo_mes) {
+        return [$valor];
+    }
+
+    return array_values(array_filter(array_map('trim', explode(',', $valor))));
+}
+
+/**
  * Devuelve las escuelas detectadas en el carrito en base al producto asociado.
  */
 function skc_obtener_escuelas_en_carrito(): array
@@ -38,7 +63,7 @@ function skc_validar_carrito_una_escuela(): void
     }
 }
 
-//add_action('wp_footer', 'depurar_carrito_woocommerce');
+// add_action('wp_footer', 'depurar_carrito_woocommerce');
 // Agrega este código al principio de tu functions.php o en tu plugin de pruebas
 add_action('init', function() {
     if ( isset($_GET['reset_discount']) && $_GET['reset_discount'] == 1 ) {
@@ -72,8 +97,7 @@ function get_semanas_con_beca()
         // Primero obtenemos todas las semanas
         foreach ($cart_item['wapf'] as $field) {
             if ($field['type'] === 'checkboxes' && $field['label'] === 'Semanas') {
-                $semanas = explode(',', $field['value']);
-                $semanas = array_map('trim', $semanas);
+                $semanas = skc_parsear_lista_semanas((string) $field['value']);
             }
         }
 
@@ -191,8 +215,8 @@ function obtener_info_cart() {
             continue;
         }
 
-        // Separamos la cadena en un array de semanas
-        $semanas = array_map('trim', explode(',', $wapf[0]['value']));
+        // Parseamos el valor para soportar semanas con formato de dias separados por comas.
+        $semanas = skc_parsear_lista_semanas((string) $wapf[0]['value']);
 
    
         // Inicializamos la información para cada semana en la clave "semanas" del resultado
