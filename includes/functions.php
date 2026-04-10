@@ -28,6 +28,7 @@ add_action('woocommerce_checkout_fields', 'mostrar_campos_formulario');
 add_filter('woocommerce_checkout_fields', 'skc_remove_billing_fields_requirement');
 add_action('woocommerce_checkout_create_order', 'skc_set_tutor_data_as_billing', 10, 2);
 add_action('woocommerce_checkout_order_created', 'reservar_plazas_campamento', 10, 2);
+add_action('woocommerce_store_api_checkout_order_processed', 'reservar_plazas_campamento', 10, 1);
 
 //add_action('woocommerce_payment_complete', 'descontar_plazas', 10, 1);
 //add_action('woocommerce_thankyou', 'descontar_plazas', 10, 1);
@@ -35,27 +36,13 @@ add_action('woocommerce_checkout_process', 'validar_campos_personalizados', 10, 
 add_action('woocommerce_checkout_update_order_meta', 'capturar_datos_alumno');
 add_filter('woocommerce_add_to_cart_redirect', 'custom_add_to_cart_redirect');
 add_action('woocommerce_order_status_processing', 'descontar_plazas', 10, 1);
+add_action('woocommerce_check_cart_items', 'skc_validar_carrito_una_escuela');
 
 // Diccionario de traducción de catalán a castellano
    
 
 function descontar_plazas($order_id)
 {
-    $idSemana = array(
-        '25 al 27 de juny' => 1,
-        '30 de juny al 4 de juliol' => 2,
-        '7 al 11 de juliol' => 3,
-        '14 al 18 de juliol' => 4,
-        '21 al 25 de juliol' => 5,
-        '28 de juliol al 1 de agost' => 6,
-		'25 al 27 de junio' => 1,
-        '30 de junio al 4 de julio' => 2,
-        '7 al 11 de julio' => 3,
-        '14 al 18 de julio' => 4,
-        '21 al 25 de julio' => 5,
-        '28 de julio al 1 de agosto' => 6,
-    );
-   
     // Obtener el pedido
     $order = wc_get_order($order_id);
     if (!$order) {
@@ -71,6 +58,7 @@ function descontar_plazas($order_id)
     }
     
     global $wpdb;
+    $tabla_horarios = $wpdb->prefix . 'horarios_semana';
 
     error_log("🔄 Iniciando transacción en la base de datos...");
     $wpdb->query('START TRANSACTION');
@@ -80,14 +68,19 @@ function descontar_plazas($order_id)
             error_log("📆 Procesando la semana: $nombre_semana");
 
             $tipo = $datos['horario'];
+            $escuela_id = isset($datos['escuela_id']) ? (int) $datos['escuela_id'] : null;
             error_log("🕒 Tipo de horario: $tipo");
 
-       
-                $semana = $idSemana[$nombre_semana];
+            $semana = skc_obtener_semana_id_por_nombre($nombre_semana, $escuela_id);
+
+            if (!$semana) {
+                error_log("❌ No se encontró ID para la semana: $nombre_semana");
+                continue;
+            }
 
             // Obtener el ID del horario correspondiente
             $horario = $wpdb->get_row($wpdb->prepare(
-                "SELECT id, plazas, plazas_reservadas FROM wp_horarios_semana WHERE semana_id = %d AND tipo_horario = %s",
+                "SELECT id, plazas, plazas_reservadas FROM {$tabla_horarios} WHERE semana_id = %d AND tipo_horario = %s",
                 $semana,
                 $tipo
             ));
@@ -112,7 +105,7 @@ function descontar_plazas($order_id)
 
             // Actualizar la cantidad de plazas y reservas en la base de datos
             $resultado = $wpdb->update(
-                'wp_horarios_semana',
+                $tabla_horarios,
                 ['plazas' => $nuevas_plazas, 'plazas_reservadas' => $nuevas_reservas],
                 ['id' => $horario->id]
             );
@@ -797,29 +790,101 @@ function crear_usuarios_tutor_y_alumno($order, $data)
  */
 function reservar_plazas_campamento($order): void
 {
-    $info_semanal = obtener_info_cart();
-
     $plazas_reservadas = [];
 
-    // Recorremos cada semana
-    foreach ($info_semanal['semanas'] as $nombre_semana => $datos_semana) {
-        // Extraemos la beca, el tipo de horario y el precio base
-        $tipo = $datos_semana['horario']['tipo'];
-        $acogida = $datos_semana['acogida']; // Asegúrate de que esta clave exista
-        $beca = $datos_semana['beca']; // Asegúrate de que esta clave exista
+    // Función auxiliar para eliminar contenido entre paréntesis
+    $quitar_parentesis = function (string $texto): string {
+        return trim(preg_replace('/\s*\(.*?\)\s*/', '', $texto));
+    };
 
-        // Guardamos la información en un array
-        $plazas_reservadas[$nombre_semana] = [
-            'horario' => $tipo,
-            'acogida' => $acogida,
-            'beca' => $beca,
-        ];
+    foreach ($order->get_items() as $item) {
+        $product_id = (int) $item->get_product_id();
+        $escuela_id = (int) skc_obtener_escuela_id_por_producto($product_id);
+
+        // Leer el _wapf_meta del line item
+        $wapf_meta = $item->get_meta('_wapf_meta', true);
+        if (empty($wapf_meta) || !is_array($wapf_meta)) {
+            continue;
+        }
+
+        // Reindexar por posición para procesar igual que el carrito
+        $campos = array_values($wapf_meta);
+
+        // El primer campo debe contener las semanas
+        if (empty($campos[0]['value'])) {
+            continue;
+        }
+
+        $semanas = skc_parsear_lista_semanas((string) $campos[0]['value']);
+
+        foreach ($semanas as $semana) {
+            if (!isset($plazas_reservadas[$semana])) {
+                $plazas_reservadas[$semana] = [
+                    'horario'    => '',
+                    'acogida'    => '',
+                    'beca'       => 'No',
+                    'escuela_id' => $escuela_id,
+                    'product_id' => $product_id,
+                ];
+            }
+        }
+
+        for ($i = 1; $i < count($campos); $i++) {
+            $campo = $campos[$i];
+            if (empty($campo['label']) || empty($campo['value'])) {
+                continue;
+            }
+
+            $label = $campo['label'];
+            $valor = $campo['value'];
+
+            foreach ($semanas as $semana) {
+                if (stripos($label, $semana) === false) {
+                    continue;
+                }
+
+                if (stripos($label, 'Horario del') !== false || stripos($label, 'Horari del') !== false) {
+                    $valor_limpio = $quitar_parentesis($valor);
+                    $tipo = '';
+
+                    $semana_id = skc_obtener_semana_id_por_nombre($semana, $escuela_id);
+                    if ($semana_id) {
+                        $tipo = (string) (skc_resolver_tipo_horario_por_semana((int) $semana_id, $valor_limpio) ?? '');
+                    }
+
+                    // Fallback legacy para compatibilidad con datos/horarios historicos.
+                    if ($tipo === '') {
+                        if (stripos($valor_limpio, '9:00h a 14:30h') !== false) {
+                            $tipo = 'mañana';
+                        } elseif (stripos($valor_limpio, '9:00h a 17:00h') !== false) {
+                            $tipo = 'completo';
+                        }
+
+                        if ($tipo !== '') {
+                            error_log('SKC Horarios: fallback legacy aplicado en reservar_plazas_campamento para semana "' . $semana . '".');
+                        }
+                    }
+
+                    if ($tipo === '') {
+                        error_log('SKC Horarios: no se pudo resolver tipo_horario en reservar_plazas_campamento para semana "' . $semana . '" y valor "' . $valor_limpio . '".');
+                    }
+                    $plazas_reservadas[$semana]['horario'] = $tipo;
+
+                } elseif (stripos($label, 'Acogida') !== false || stripos($label, 'Acollida') !== false) {
+                    $plazas_reservadas[$semana]['acogida'] = $quitar_parentesis($valor);
+
+                } elseif (stripos($label, 'Beca') !== false || stripos($valor, 'beca') !== false) {
+                    $plazas_reservadas[$semana]['beca'] = (stripos($quitar_parentesis($valor), 'solicita beca') !== false) ? 'Si' : 'No';
+                }
+            }
+        }
     }
 
-    // Actualizamos el meta del pedido utilizando el método de objeto
-    $order->update_meta_data('plazas_reservadas', $plazas_reservadas);
+    if (empty($plazas_reservadas)) {
+        return;
+    }
 
-    // Guarda los cambios en el objeto de pedido
+    $order->update_meta_data('plazas_reservadas', $plazas_reservadas);
     $order->save();
 }
 
@@ -1025,20 +1090,6 @@ function filtrar_avisos_woocommerce($message) {
 
 // Función para reponer las plazas cuando el pedido cambia a cancelado o reembolsado
 function reponer_plazas_en_pedido_cancelado( $order_id, $old_status, $new_status, $order ) {
-    $idSemana = array(
-        '25 al 27 de juny' => 1,
-        '30 de juny al 4 de juliol' => 2,
-        '7 al 11 de juliol' => 3,
-        '14 al 18 de juliol' => 4,
-        '21 al 25 de juliol' => 5,
-        '28 de juliol al 1 agost' => 6,
-		'25 al 27 de junio' => 1,
-        '30 de junio al 4 de julio' => 2,
-        '7 al 11 de julio' => 3,
-        '14 al 18 de julio' => 4,
-        '21 al 25 de julio' => 5,
-        '28 de julio al 1 agosto' => 6,
-    );
     // Si el nuevo estado es 'refunded' o 'cancelled'
     if ( in_array( $new_status, array( 'refunded', 'cancelled' ) ) ) {
         // Recuperar las plazas reservadas del pedido
@@ -1047,20 +1098,23 @@ function reponer_plazas_en_pedido_cancelado( $order_id, $old_status, $new_status
             return;
         }
         global $wpdb;
+        $tabla_horarios = $wpdb->prefix . 'horarios_semana';
         foreach ( $plazas_reservadas as $nombre_semana => $datos ) {
-            if ( ! isset( $idSemana[ $nombre_semana ] ) ) {
+            $escuela_id = isset($datos['escuela_id']) ? (int) $datos['escuela_id'] : null;
+            $semana_id = skc_obtener_semana_id_por_nombre($nombre_semana, $escuela_id);
+
+            if ( ! $semana_id ) {
                 error_log("❌ No se encontró ID para la semana: $nombre_semana");
                 continue;
             }
-            
-            $semana_id = $idSemana[ $nombre_semana ];
+
             // Se asume que el tipo de horario está en el campo 'horario'
             $tipo = isset( $datos['horario'] ) ? $datos['horario'] : '';
             
-            // Buscar el registro correspondiente en la tabla wp_horarios_semana
+            // Buscar el registro correspondiente en la tabla de horarios
             $horario = $wpdb->get_row(
                 $wpdb->prepare(
-                    "SELECT id, plazas, plazas_reservadas FROM wp_horarios_semana WHERE semana_id = %d AND tipo_horario = %s",
+                    "SELECT id, plazas, plazas_reservadas FROM {$tabla_horarios} WHERE semana_id = %d AND tipo_horario = %s",
                     $semana_id,
                     $tipo
                 )
@@ -1076,7 +1130,7 @@ function reponer_plazas_en_pedido_cancelado( $order_id, $old_status, $new_status
             $nuevas_reservas = max( 0, $horario->plazas_reservadas - 1 );
             
             $resultado = $wpdb->update(
-                'wp_horarios_semana',
+                $tabla_horarios,
                 array(
                     'plazas'             => $nuevas_plazas,
                     'plazas_reservadas'  => $nuevas_reservas,

@@ -5,7 +5,65 @@ if (!defined('ABSPATH')) {
     exit; // Salir si se accede directamente
 }
 
-//add_action('wp_footer', 'depurar_carrito_woocommerce');
+/**
+ * Parsea el valor del campo "Semanas" de WAPF.
+ * - Si es una lista de dias con mes comun (ej: "22,23,25,26 de junio"), lo mantiene como una sola semana.
+ * - En otros casos, separa por comas para mantener compatibilidad historica.
+ */
+function skc_parsear_lista_semanas(string $valor): array
+{
+    $valor = trim(preg_replace('/\s+/u', ' ', $valor));
+
+    if ($valor === '') {
+        return [];
+    }
+
+    $es_lista_dias_mismo_mes = (bool) preg_match(
+        '/^\d{1,2}(?:\s*,\s*\d{1,2})+\s+de\s+[\p{L}]+(?:\s+\d{4})?$/u',
+        $valor
+    );
+
+    if ($es_lista_dias_mismo_mes) {
+        return [$valor];
+    }
+
+    return array_values(array_filter(array_map('trim', explode(',', $valor))));
+}
+
+/**
+ * Devuelve las escuelas detectadas en el carrito en base al producto asociado.
+ */
+function skc_obtener_escuelas_en_carrito(): array
+{
+    if (!function_exists('WC') || !WC()->cart) {
+        return [];
+    }
+
+    $escuelas = [];
+    foreach (WC()->cart->get_cart() as $cart_item) {
+        $product_id = isset($cart_item['product_id']) ? (int) $cart_item['product_id'] : 0;
+        $escuela_id = skc_obtener_escuela_id_por_producto($product_id);
+
+        if ($escuela_id) {
+            $escuelas[$escuela_id] = $escuela_id;
+        }
+    }
+
+    return array_values($escuelas);
+}
+
+/**
+ * Impide mezclas de escuelas en el mismo carrito para evitar ambiguedades de stock.
+ */
+function skc_validar_carrito_una_escuela(): void
+{
+    $escuelas = skc_obtener_escuelas_en_carrito();
+    if (count($escuelas) > 1) {
+        wc_add_notice('No se pueden combinar productos de distintas escuelas en el mismo pedido.', 'error');
+    }
+}
+
+// add_action('wp_footer', 'depurar_carrito_woocommerce');
 // Agrega este código al principio de tu functions.php o en tu plugin de pruebas
 add_action('init', function() {
     if ( isset($_GET['reset_discount']) && $_GET['reset_discount'] == 1 ) {
@@ -39,8 +97,7 @@ function get_semanas_con_beca()
         // Primero obtenemos todas las semanas
         foreach ($cart_item['wapf'] as $field) {
             if ($field['type'] === 'checkboxes' && $field['label'] === 'Semanas') {
-                $semanas = explode(',', $field['value']);
-                $semanas = array_map('trim', $semanas);
+                $semanas = skc_parsear_lista_semanas((string) $field['value']);
             }
         }
 
@@ -143,6 +200,9 @@ function obtener_info_cart() {
     $cart = WC()->cart->get_cart();
 
     foreach ($cart as $cart_item) {
+        $product_id = isset($cart_item['product_id']) ? (int) $cart_item['product_id'] : 0;
+        $escuela_id = skc_obtener_escuela_id_por_producto($product_id);
+
         // Verifica que el artículo tenga la información personalizada "wapf"
         if (!isset($cart_item['wapf']) || !is_array($cart_item['wapf'])) {
             continue;
@@ -155,8 +215,8 @@ function obtener_info_cart() {
             continue;
         }
 
-        // Separamos la cadena en un array de semanas
-        $semanas = array_map('trim', explode(',', $wapf[0]['value']));
+        // Parseamos el valor para soportar semanas con formato de dias separados por comas.
+        $semanas = skc_parsear_lista_semanas((string) $wapf[0]['value']);
 
    
         // Inicializamos la información para cada semana en la clave "semanas" del resultado
@@ -169,6 +229,8 @@ function obtener_info_cart() {
                         'precio' => 0,
                         'tipo'   => ''
                     ),
+                    'escuela_id' => $escuela_id,
+                    'product_id' => $product_id,
                     'acogida' => '',
                     'beca'    => ''
                 );
@@ -197,10 +259,27 @@ function obtener_info_cart() {
                         $valor_limpio = $quitar_parentesis($valor);
                         // Determinar el tipo de horario según el contenido
                         $tipo = '';
-                        if (stripos($valor_limpio, '9:00h a 14:30h') !== false) {
-                            $tipo = 'mañana';
-                        } elseif (stripos($valor_limpio, '9:00h a 17:00h') !== false) {
-                            $tipo = 'completo';
+
+                        $semana_id = skc_obtener_semana_id_por_nombre($semana, $escuela_id);
+                        if ($semana_id) {
+                            $tipo = (string) (skc_resolver_tipo_horario_por_semana((int) $semana_id, $valor_limpio) ?? '');
+                        }
+
+                        // Fallback legacy para compatibilidad con datos/horarios historicos.
+                        if ($tipo === '') {
+                            if (stripos($valor_limpio, '9:00h a 14:30h') !== false) {
+                                $tipo = 'mañana';
+                            } elseif (stripos($valor_limpio, '9:00h a 17:00h') !== false) {
+                                $tipo = 'completo';
+                            }
+
+                            if ($tipo !== '') {
+                                error_log('SKC Horarios: fallback legacy aplicado en obtener_info_cart para semana "' . $semana . '".');
+                            }
+                        }
+
+                        if ($tipo === '') {
+                            error_log('SKC Horarios: no se pudo resolver tipo_horario en obtener_info_cart para semana "' . $semana . '" y valor "' . $valor_limpio . '".');
                         }
 
                         $resultado['semanas'][$semana]['horario'] = array(

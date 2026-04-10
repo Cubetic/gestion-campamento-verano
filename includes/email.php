@@ -113,9 +113,9 @@ function adjuntar_pdf_datos_alumno( $attachments, $email_id, $order ) {
     // Adjuntar el archivo de condiciones generales según el idioma
     $current_lang = function_exists('pll_current_language') ? pll_current_language() : 'es';
     if ( $current_lang === 'ca' ) {
-        $conditions_pdf = home_url('/wp-content/uploads/2025/03/CONDICIONS-GENERALS-I-AUTORITZACIONS-SKC25.pdf');
+        $conditions_pdf = home_url('/wp-content/uploads/2025/03/CONDICIONS-GENERALS-I-AUTORITZACIONS-SKC26.pdf');
     } else {
-        $conditions_pdf = home_url('/wp-content/uploads/2025/03/CONDICIONES-GENERALES-y-AUTORIZACIONES-SKC25.pdf');
+        $conditions_pdf = home_url('/wp-content/uploads/2025/03/CONDICIONES-GENERALES-y-AUTORIZACIONES-SKC26.pdf');
     }
     // Convertir la URL a una ruta absoluta (suponiendo que la ruta local coincide)
     $parsed = parse_url( $conditions_pdf );

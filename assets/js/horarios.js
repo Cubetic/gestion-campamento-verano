@@ -4,33 +4,34 @@ jQuery(document).ready(function ($) {
 const langAttr = $('html').attr('lang') || '';
 const isCatalan = langAttr.toLowerCase().startsWith('ca');
 
+// Diccionario centralizado desde PHP (wp_localize_script) con fallback local.
+const MONTHS_MAP = (window.misDatosAjax && misDatosAjax.monthsMap) ? misDatosAjax.monthsMap : {
+  'gener': 'enero',
+  'febrer': 'febrero',
+  'marc': 'marzo',
+  'març': 'marzo',
+  'abril': 'abril',
+  'maig': 'mayo',
+  'juny': 'junio',
+  'juliol': 'julio',
+  'agost': 'agosto',
+  'setembre': 'septiembre',
+  'octubre': 'octubre',
+  'novembre': 'noviembre',
+  'desembre': 'diciembre'
+};
+
 // Texto a mostrar cuando no hay plazas, según el idioma
 const TEXT_SIN_PLAZAS = isCatalan ? ' (Sense places)' : ' (Sin plazas)';
   // ==================================================
   // 1) FUNCIÓN PARA UNIFICAR MESES DE CATALÁN A CASTELLANO
   // ==================================================
   function unificarMesesACastellano(texto) {
-    // Diccionario para pasar de catalán a castellano
-    const diccionario = {
-      'gener': 'enero',
-      'febrer': 'febrero',
-      'març': 'marzo',
-      'abril': 'abril',
-      'maig': 'mayo',
-      'juny': 'junio',
-      'juliol': 'julio',
-      'agost': 'agosto',
-      'setembre': 'septiembre',
-      'octubre': 'octubre',
-      'novembre': 'noviembre',
-      'desembre': 'diciembre'
-    };
-
     // Reemplazar cada palabra en catalán por su equivalente en castellano
-    Object.keys(diccionario).forEach(cat => {
+    Object.keys(MONTHS_MAP).forEach(cat => {
       // \b asegura que la palabra coincida completa (ej. "juny" no pilla "junyors")
       const regExp = new RegExp('\\b' + cat + '\\b', 'gi');
-      texto = texto.replace(regExp, diccionario[cat]);
+      texto = texto.replace(regExp, MONTHS_MAP[cat]);
     });
 
     return texto;
@@ -51,11 +52,20 @@ const TEXT_SIN_PLAZAS = isCatalan ? ' (Sense places)' : ' (Sin plazas)';
     if (actualizacionEnProceso) return;
     actualizacionEnProceso = true;
 
+    const productId = parseInt((misDatosAjax && misDatosAjax.productId) ? misDatosAjax.productId : 0, 10) || 0;
+    const escuelaId = parseInt((misDatosAjax && misDatosAjax.escuelaId) ? misDatosAjax.escuelaId : 0, 10) || 0;
+
+    const requestData = {
+      action: 'get_horarios_stock',
+      product_id: productId,
+      escuela_id: escuelaId
+    };
+
   
     $.ajax({
       url: misDatosAjax.ajaxUrl,
       method: 'POST',
-      data: { action: 'get_horarios_stock' },
+      data: requestData,
       success: function (response) {
         if (response && response.success && response.disponibilidad) {
         
@@ -140,6 +150,53 @@ const TEXT_SIN_PLAZAS = isCatalan ? ' (Sense places)' : ' (Sin plazas)';
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/\s+/g, " ")
       .trim();
+  }
+
+  function normalizarTextoHorario(texto) {
+    let t = normalizarTexto(texto || '');
+    t = t.replace(/^de\s+/i, '').trim();
+    return t;
+  }
+
+  function resolverTipoHorarioPorTexto(horarioTexto, horariosSemana) {
+    if (!horariosSemana) {
+      return '';
+    }
+
+    const textoNormalizado = normalizarTextoHorario(horarioTexto);
+    const tipos = Object.keys(horariosSemana);
+
+    for (let i = 0; i < tipos.length; i++) {
+      const tipo = tipos[i];
+      const nombreHorario = (horariosSemana[tipo] && horariosSemana[tipo].nombre_horario) ? horariosSemana[tipo].nombre_horario : '';
+      if (!nombreHorario) {
+        continue;
+      }
+
+      if (normalizarTextoHorario(nombreHorario) === textoNormalizado) {
+        return tipo;
+      }
+    }
+
+    for (let i = 0; i < tipos.length; i++) {
+      const tipo = tipos[i];
+      const nombreHorario = (horariosSemana[tipo] && horariosSemana[tipo].nombre_horario) ? horariosSemana[tipo].nombre_horario : '';
+      if (!nombreHorario) {
+        continue;
+      }
+
+      const nombreNormalizado = normalizarTextoHorario(nombreHorario);
+      if (
+        nombreNormalizado && (
+          textoNormalizado.includes(nombreNormalizado) ||
+          nombreNormalizado.includes(textoNormalizado)
+        )
+      ) {
+        return tipo;
+      }
+    }
+
+    return '';
   }
 
   // ==================================================
@@ -337,12 +394,19 @@ const TEXT_SIN_PLAZAS = isCatalan ? ' (Sense places)' : ' (Sin plazas)';
         }).text().trim();
       
       
-        // Determinar el tipo de horario
-        let tipoHorario = '';
-        if (horarioTexto.includes('14:30h')) {
-          tipoHorario = 'mañana';
-        } else if (horarioTexto.includes('17:00h')) {
-          tipoHorario = 'completo';
+        // Determinar el tipo de horario por nombre_horario configurado en BD.
+        let tipoHorario = resolverTipoHorarioPorTexto(
+          horarioTexto,
+          semanaCorrespondiente ? semanaCorrespondiente.horarios : null
+        );
+
+        // Fallback legacy para configuraciones antiguas.
+        if (!tipoHorario) {
+          if (horarioTexto.includes('14:30h')) {
+            tipoHorario = 'mañana';
+          } else if (horarioTexto.includes('17:00h')) {
+            tipoHorario = 'completo';
+          }
         }
         if (!tipoHorario) {
           console.log("No se pudo determinar el tipo de horario");
