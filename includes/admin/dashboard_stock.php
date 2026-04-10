@@ -129,9 +129,9 @@ function pagina_admin_gestion_campamento()
                     <tr>
                         <th>Semana</th>
                         <th>Plazas Totales</th>
-                        <th>Diponibles de 9:00 a 14:30</th>
+                        <th>Mañana</th>
                         <th>Reservas</th>
-                        <th>Disponibles de 9:00 a 17:00</th>
+                        <th>Completo</th>
                         <th>Reservas</th>
                     </tr>
                 </thead>

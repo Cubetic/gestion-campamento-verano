@@ -104,3 +104,101 @@ function skc_obtener_semana_id_por_nombre_y_escuela(string $nombre_semana, ?int 
 
     return null;
 }
+
+/**
+ * Normaliza texto de horarios para comparaciones robustas.
+ */
+function skc_normalizar_texto_horario(string $texto): string
+{
+    $normalizado = trim(preg_replace('/\s+/u', ' ', $texto));
+    $normalizado = preg_replace('/^de\s+/iu', '', $normalizado);
+
+    if (function_exists('mb_strtolower')) {
+        $normalizado = mb_strtolower($normalizado, 'UTF-8');
+    } else {
+        $normalizado = strtolower($normalizado);
+    }
+
+    return trim($normalizado);
+}
+
+/**
+ * Resuelve el tipo_horario configurado para una semana a partir del texto visible.
+ */
+function skc_resolver_tipo_horario_por_semana(int $semana_id, string $valor_horario): ?string
+{
+    if ($semana_id <= 0 || trim($valor_horario) === '') {
+        return null;
+    }
+
+    global $wpdb;
+    $tabla_horarios = $wpdb->prefix . 'horarios_semana';
+
+    $horarios = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT tipo_horario, nombre_horario
+             FROM {$tabla_horarios}
+             WHERE semana_id = %d",
+            $semana_id
+        ),
+        ARRAY_A
+    );
+
+    if (empty($horarios)) {
+        return null;
+    }
+
+    $valor_normalizado = skc_normalizar_texto_horario($valor_horario);
+
+    $coincidencias_exactas = [];
+    $coincidencias_parciales = [];
+
+    foreach ($horarios as $horario) {
+        $nombre_horario = isset($horario['nombre_horario']) ? (string) $horario['nombre_horario'] : '';
+        if ($nombre_horario === '') {
+            continue;
+        }
+
+        $nombre_normalizado = skc_normalizar_texto_horario($nombre_horario);
+        if ($nombre_normalizado !== '' && $nombre_normalizado === $valor_normalizado) {
+            $coincidencias_exactas[] = isset($horario['tipo_horario']) ? (string) $horario['tipo_horario'] : '';
+        }
+    }
+
+    $coincidencias_exactas = array_values(array_unique(array_filter($coincidencias_exactas)));
+    if (count($coincidencias_exactas) === 1) {
+        return $coincidencias_exactas[0];
+    }
+    if (count($coincidencias_exactas) > 1) {
+        error_log('SKC Horarios: coincidencia exacta ambigua para semana_id=' . $semana_id . ' y valor="' . $valor_horario . '"');
+        return null;
+    }
+
+    foreach ($horarios as $horario) {
+        $nombre_horario = isset($horario['nombre_horario']) ? (string) $horario['nombre_horario'] : '';
+        if ($nombre_horario === '') {
+            continue;
+        }
+
+        $nombre_normalizado = skc_normalizar_texto_horario($nombre_horario);
+        if (
+            $nombre_normalizado !== '' && (
+                strpos($valor_normalizado, $nombre_normalizado) !== false ||
+                strpos($nombre_normalizado, $valor_normalizado) !== false
+            )
+        ) {
+            $coincidencias_parciales[] = isset($horario['tipo_horario']) ? (string) $horario['tipo_horario'] : '';
+        }
+    }
+
+    $coincidencias_parciales = array_values(array_unique(array_filter($coincidencias_parciales)));
+    if (count($coincidencias_parciales) === 1) {
+        return $coincidencias_parciales[0];
+    }
+    if (count($coincidencias_parciales) > 1) {
+        error_log('SKC Horarios: coincidencia parcial ambigua para semana_id=' . $semana_id . ' y valor="' . $valor_horario . '"');
+        return null;
+    }
+
+    return null;
+}

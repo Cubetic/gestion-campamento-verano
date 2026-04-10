@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Gestion de plazas de campamento de verano
  * Description: Muestra una tabla con los datos de las reservas realizadas por los alumnos para las escuelas Duran I Bas".
- * Version: 1.0.1
+ * Version: 1.0.2
  * Author: Nico Demarchi
  */
 
@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
 }
 
 define('IMG_URL', plugin_dir_url(__FILE__) . 'assets/images/');
-define('SKC_DB_SCHEMA_VERSION', '1.2.0');
+define('SKC_DB_SCHEMA_VERSION', '1.3.0');
 require_once plugin_dir_path(__FILE__) . './includes/db/skc-db-schema.php';
 require_once plugin_dir_path(__FILE__) . './includes/db/skc-db-migrations.php';
 require_once plugin_dir_path(__FILE__) . './includes/semanas.php';
@@ -21,6 +21,7 @@ require_once plugin_dir_path(__FILE__) . './includes/descuentos.php';
 require_once plugin_dir_path(__FILE__) . './includes/cron.php';
 require_once plugin_dir_path(__FILE__) . './includes/admin/dashboard_stock.php';
 require_once plugin_dir_path(__FILE__) . './includes/admin/dashboard_escuelas.php';
+require_once plugin_dir_path(__FILE__) . './includes/admin/dashboard_producto.php';
 require_once plugin_dir_path(__FILE__) . './includes/admin/dashboard_carnet.php';
 require_once plugin_dir_path(__FILE__) . './includes/admin/dashboard_diplomas.php';
 
@@ -58,6 +59,7 @@ function reservas_menu_admin()
         'pagina_admin_gestion_campamento'  // Función para mostrar contenido
     );
 
+    // Submenú para Escuelas
     add_submenu_page(
         'SportyKidsCamp',
         'Escuelas',
@@ -66,6 +68,17 @@ function reservas_menu_admin()
         'escuelas',
         'skc_admin_escuelas_page'
     );
+
+    // Submenú para Crear Producto
+    add_submenu_page(
+        'SportyKidsCamp',
+        'Creación de Producto',
+        'Crear Producto',
+        'manage_woocommerce',
+        'crear-producto',
+        'skc_admin_crear_producto_page'
+    );
+
     // Submenú para generar carnets en PDF
     add_submenu_page(
         'SportyKidsCamp',   // Slug del menú principal

@@ -152,6 +152,53 @@ const TEXT_SIN_PLAZAS = isCatalan ? ' (Sense places)' : ' (Sin plazas)';
       .trim();
   }
 
+  function normalizarTextoHorario(texto) {
+    let t = normalizarTexto(texto || '');
+    t = t.replace(/^de\s+/i, '').trim();
+    return t;
+  }
+
+  function resolverTipoHorarioPorTexto(horarioTexto, horariosSemana) {
+    if (!horariosSemana) {
+      return '';
+    }
+
+    const textoNormalizado = normalizarTextoHorario(horarioTexto);
+    const tipos = Object.keys(horariosSemana);
+
+    for (let i = 0; i < tipos.length; i++) {
+      const tipo = tipos[i];
+      const nombreHorario = (horariosSemana[tipo] && horariosSemana[tipo].nombre_horario) ? horariosSemana[tipo].nombre_horario : '';
+      if (!nombreHorario) {
+        continue;
+      }
+
+      if (normalizarTextoHorario(nombreHorario) === textoNormalizado) {
+        return tipo;
+      }
+    }
+
+    for (let i = 0; i < tipos.length; i++) {
+      const tipo = tipos[i];
+      const nombreHorario = (horariosSemana[tipo] && horariosSemana[tipo].nombre_horario) ? horariosSemana[tipo].nombre_horario : '';
+      if (!nombreHorario) {
+        continue;
+      }
+
+      const nombreNormalizado = normalizarTextoHorario(nombreHorario);
+      if (
+        nombreNormalizado && (
+          textoNormalizado.includes(nombreNormalizado) ||
+          nombreNormalizado.includes(textoNormalizado)
+        )
+      ) {
+        return tipo;
+      }
+    }
+
+    return '';
+  }
+
   // ==================================================
   // 6) ACTUALIZAR DISPONIBILIDAD DE SEMANAS
   // ==================================================
@@ -347,12 +394,19 @@ const TEXT_SIN_PLAZAS = isCatalan ? ' (Sense places)' : ' (Sin plazas)';
         }).text().trim();
       
       
-        // Determinar el tipo de horario
-        let tipoHorario = '';
-        if (horarioTexto.includes('14:30h')) {
-          tipoHorario = 'mañana';
-        } else if (horarioTexto.includes('17:00h')) {
-          tipoHorario = 'completo';
+        // Determinar el tipo de horario por nombre_horario configurado en BD.
+        let tipoHorario = resolverTipoHorarioPorTexto(
+          horarioTexto,
+          semanaCorrespondiente ? semanaCorrespondiente.horarios : null
+        );
+
+        // Fallback legacy para configuraciones antiguas.
+        if (!tipoHorario) {
+          if (horarioTexto.includes('14:30h')) {
+            tipoHorario = 'mañana';
+          } else if (horarioTexto.includes('17:00h')) {
+            tipoHorario = 'completo';
+          }
         }
         if (!tipoHorario) {
           console.log("No se pudo determinar el tipo de horario");
