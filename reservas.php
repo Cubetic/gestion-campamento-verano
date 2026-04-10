@@ -59,6 +59,7 @@ function reservas_menu_admin()
         'pagina_admin_gestion_campamento'  // Función para mostrar contenido
     );
 
+    // Submenú para Escuelas
     add_submenu_page(
         'SportyKidsCamp',
         'Escuelas',
@@ -68,6 +69,7 @@ function reservas_menu_admin()
         'skc_admin_escuelas_page'
     );
 
+    // Submenú para Crear Producto
     add_submenu_page(
         'SportyKidsCamp',
         'Creación de Producto',
