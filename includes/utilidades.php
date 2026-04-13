@@ -31,6 +31,25 @@ function skc_parsear_lista_semanas(string $valor): array
 }
 
 /**
+ * Comprueba si el label del campo de semanas usa ES o CA.
+ */
+function skc_es_label_semanas(string $label): bool
+{
+    $label = trim($label);
+    if ($label === '') {
+        return false;
+    }
+
+    if (function_exists('mb_strtolower')) {
+        $label = mb_strtolower($label, 'UTF-8');
+    } else {
+        $label = strtolower($label);
+    }
+
+    return in_array($label, ['semanas', 'setmanes'], true);
+}
+
+/**
  * Devuelve las escuelas detectadas en el carrito en base al producto asociado.
  */
 function skc_obtener_escuelas_en_carrito(): array
@@ -96,7 +115,7 @@ function get_semanas_con_beca()
 
         // Primero obtenemos todas las semanas
         foreach ($cart_item['wapf'] as $field) {
-            if ($field['type'] === 'checkboxes' && $field['label'] === 'Semanas') {
+            if ($field['type'] === 'checkboxes' && !empty($field['label']) && skc_es_label_semanas((string) $field['label'])) {
                 $semanas = skc_parsear_lista_semanas((string) $field['value']);
             }
         }

@@ -33,6 +33,7 @@ function skc_admin_escuelas_page(): void
         $nombre_ca = sanitize_text_field($_POST['nombre_ca'] ?? '');
         $slug_input = sanitize_title($_POST['slug'] ?? '');
         $producto_id = isset($_POST['producto_id']) && $_POST['producto_id'] !== '' ? absint($_POST['producto_id']) : null;
+        $producto_id_ca = isset($_POST['producto_id_ca']) && $_POST['producto_id_ca'] !== '' ? absint($_POST['producto_id_ca']) : null;
         $activa = isset($_POST['activa']) ? 1 : 0;
 
         if ($nombre === '') {
@@ -44,10 +45,11 @@ function skc_admin_escuelas_page(): void
                 'nombre_ca' => $nombre_ca !== '' ? $nombre_ca : $nombre,
                 'slug' => $slug,
                 'producto_id' => $producto_id,
+                'producto_id_ca' => $producto_id_ca,
                 'activa' => $activa,
             ];
 
-            $format = ['%s', '%s', '%s', '%d', '%d'];
+            $format = ['%s', '%s', '%s', '%d', '%d', '%d'];
 
             if ($escuela_id > 0) {
                 $resultado = $wpdb->update($tabla_escuelas, $data, ['id' => $escuela_id], $format, ['%d']);
@@ -275,7 +277,8 @@ function skc_admin_escuelas_page(): void
                     <th>Nombre (ES)</th>
                     <th>Nombre (CA)</th>
                     <th>Slug</th>
-                    <th>Producto ID</th>
+                    <th>Producto ID (ES)</th>
+                    <th>Producto ID (CA)</th>
                     <th>Activa</th>
                     <th>Acciones</th>
                 </tr>
@@ -289,6 +292,7 @@ function skc_admin_escuelas_page(): void
                             <td><?php echo esc_html($escuela->nombre_ca); ?></td>
                             <td><code><?php echo esc_html($escuela->slug); ?></code></td>
                             <td><?php echo $escuela->producto_id ? esc_html($escuela->producto_id) : '-'; ?></td>
+                            <td><?php echo !empty($escuela->producto_id_ca) ? esc_html($escuela->producto_id_ca) : '-'; ?></td>
                             <td><?php echo (int) $escuela->activa === 1 ? 'Si' : 'No'; ?></td>
                             <td>
                                 <a class="button button-small" href="<?php echo esc_url(add_query_arg(['page' => 'escuelas', 'editar_escuela' => (int) $escuela->id], admin_url('admin.php'))); ?>">Editar</a>
@@ -304,7 +308,7 @@ function skc_admin_escuelas_page(): void
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="7">No hay escuelas registradas.</td>
+                        <td colspan="8">No hay escuelas registradas.</td>
                     </tr>
                 <?php endif; ?>
             </tbody>
@@ -350,7 +354,14 @@ function skc_admin_escuelas_page(): void
                             <th scope="row"><label for="producto_id">Producto WooCommerce (ID)</label></th>
                             <td>
                                 <input type="number" min="1" name="producto_id" id="producto_id" class="small-text" value="<?php echo esc_attr($escuela_editar->producto_id ?? ''); ?>">
-                                <p class="description">ID del producto asociado en WooCommerce.</p>
+                                <p class="description">ID del producto en espanol asociado a esta escuela.</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="producto_id_ca">Producto WooCommerce (ID CA)</label></th>
+                            <td>
+                                <input type="number" min="1" name="producto_id_ca" id="producto_id_ca" class="small-text" value="<?php echo esc_attr($escuela_editar->producto_id_ca ?? ''); ?>">
+                                <p class="description">ID del producto en catalan asociado a esta escuela. Ambos productos comparten el mismo stock.</p>
                             </td>
                         </tr>
                         <tr>
