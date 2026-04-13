@@ -33,8 +33,6 @@ add_action('woocommerce_store_api_checkout_order_processed', 'reservar_plazas_ca
 //add_action('woocommerce_payment_complete', 'descontar_plazas', 10, 1);
 //add_action('woocommerce_thankyou', 'descontar_plazas', 10, 1);
 add_action('woocommerce_checkout_process', 'validar_campos_personalizados', 10, 1);
-add_action('woocommerce_checkout_process', 'skc_validar_stock_disponible_en_checkout', 20);
-add_action('woocommerce_check_cart_items', 'skc_validar_stock_disponible_en_checkout', 20);
 add_action('woocommerce_checkout_update_order_meta', 'capturar_datos_alumno');
 add_filter('woocommerce_add_to_cart_redirect', 'custom_add_to_cart_redirect');
 add_action('woocommerce_order_status_processing', 'descontar_plazas', 10, 1);
@@ -93,9 +91,10 @@ function descontar_plazas($order_id)
             }
             error_log("📊 Horario encontrado (ID: {$horario->id}): Plazas disponibles: {$horario->plazas}, Plazas reservadas: {$horario->plazas_reservadas}");
 
-            // Permite reflejar sobreventa: si ya estaba en 0, baja a negativo y queda trazado.
+            // Verificar que haya plazas disponibles
             if ($horario->plazas <= 0) {
-                error_log("⚠️ Sobreventa detectada en horario ID {$horario->id}. Se registrará plaza negativa.");
+                error_log("⚠️ No hay plazas disponibles para el horario ID {$horario->id}");
+                continue;
             }
 
             // Descontar una plaza
@@ -792,6 +791,7 @@ function crear_usuarios_tutor_y_alumno($order, $data)
 function reservar_plazas_campamento($order): void
 {
     $plazas_reservadas = [];
+
     // Función auxiliar para eliminar contenido entre paréntesis
     $quitar_parentesis = function (string $texto): string {
         return trim(preg_replace('/\s*\(.*?\)\s*/', '', $texto));
@@ -886,129 +886,6 @@ function reservar_plazas_campamento($order): void
 
     $order->update_meta_data('plazas_reservadas', $plazas_reservadas);
     $order->save();
-}
-
-/**
- * Valida stock real en backend durante checkout.
- * Bloquea el pedido si no hay plazas suficientes en algun horario seleccionado.
- */
-function skc_validar_stock_disponible_en_checkout(): void
-{
-    if (!function_exists('WC') || !WC()->cart) {
-        return;
-    }
-
-    global $wpdb;
-    $tabla_horarios = $wpdb->prefix . 'horarios_semana';
-
-    $requerimientos = [];
-
-    foreach (WC()->cart->get_cart() as $cart_item) {
-        $product_id = isset($cart_item['product_id']) ? (int) $cart_item['product_id'] : 0;
-        $escuela_id = (int) skc_obtener_escuela_id_por_producto($product_id);
-        $cantidad_item = max(1, isset($cart_item['quantity']) ? (int) $cart_item['quantity'] : 1);
-
-        if (!isset($cart_item['wapf']) || !is_array($cart_item['wapf'])) {
-            continue;
-        }
-
-        $wapf = array_values($cart_item['wapf']);
-        $semanas = [];
-
-        foreach ($wapf as $field) {
-            if (
-                isset($field['type'], $field['label'], $field['value']) &&
-                $field['type'] === 'checkboxes' &&
-                skc_es_label_semanas((string) $field['label'])
-            ) {
-                $semanas = skc_parsear_lista_semanas((string) $field['value']);
-                break;
-            }
-        }
-
-        if (empty($semanas) && !empty($wapf[0]['value'])) {
-            $semanas = skc_parsear_lista_semanas((string) $wapf[0]['value']);
-        }
-
-        if (empty($semanas)) {
-            continue;
-        }
-
-        foreach ($wapf as $campo) {
-            if (empty($campo['label']) || empty($campo['value'])) {
-                continue;
-            }
-
-            $label = (string) $campo['label'];
-            $valor = trim(preg_replace('/\s*\(.*?\)\s*/', '', (string) $campo['value']));
-
-            if (stripos($label, 'Horario del') === false && stripos($label, 'Horari del') === false) {
-                continue;
-            }
-
-            foreach ($semanas as $semana_texto) {
-                if (stripos($label, $semana_texto) === false) {
-                    continue;
-                }
-
-                $semana_id = skc_obtener_semana_id_por_nombre((string) $semana_texto, $escuela_id);
-                if (!$semana_id) {
-                    continue;
-                }
-
-                $tipo = (string) (skc_resolver_tipo_horario_por_semana((int) $semana_id, $valor) ?? '');
-
-                // Fallback legacy para horarios historicos.
-                if ($tipo === '') {
-                    if (stripos($valor, '9:00h a 14:30h') !== false) {
-                        $tipo = 'mañana';
-                    } elseif (stripos($valor, '9:00h a 17:00h') !== false) {
-                        $tipo = 'completo';
-                    }
-                }
-
-                if ($tipo === '') {
-                    continue;
-                }
-
-                $key = $semana_id . '|' . $tipo;
-                if (!isset($requerimientos[$key])) {
-                    $requerimientos[$key] = [
-                        'semana' => (string) $semana_texto,
-                        'tipo' => $tipo,
-                        'cantidad' => 0,
-                        'semana_id' => (int) $semana_id,
-                    ];
-                }
-
-                $requerimientos[$key]['cantidad'] += $cantidad_item;
-            }
-        }
-    }
-
-    foreach ($requerimientos as $req) {
-        $plazas_disponibles = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT plazas FROM {$tabla_horarios} WHERE semana_id = %d AND tipo_horario = %s LIMIT 1",
-            (int) $req['semana_id'],
-            (string) $req['tipo']
-        ));
-
-        if ($plazas_disponibles < (int) $req['cantidad']) {
-            $tipo_legible = ((string) $req['tipo'] === 'mañana') ? 'mañana' : 'completo';
-
-            if ($plazas_disponibles <= 0) {
-                wc_add_notice(
-                    sprintf('No quedan plazas para la semana "%s" en horario %s.', (string) $req['semana'], $tipo_legible),
-                    'error'
-                );
-            } else {
-                wc_add_notice(
-                    sprintf('Plazas insuficientes para la semana "%s" en horario %s. Quedan %d.', (string) $req['semana'], $tipo_legible, $plazas_disponibles),
-                    'error'
-                );
-            }
-        }
-    }
 }
 
 
