@@ -296,6 +296,28 @@ function skc_migrar_base_datos_fase_3(): bool
 }
 
 /**
+ * Fase 4: permite asociar un segundo producto WooCommerce (p.ej. catalan)
+ * a la misma escuela para compartir stock entre productos ES/CA.
+ */
+function skc_migrar_base_datos_fase_4(): bool
+{
+	global $wpdb;
+
+	$tabla_escuelas = $wpdb->prefix . 'skc_escuelas';
+
+	if (!skc_tabla_tiene_columna($tabla_escuelas, 'producto_id_ca')) {
+		$wpdb->query("ALTER TABLE {$tabla_escuelas} ADD COLUMN producto_id_ca BIGINT NULL AFTER producto_id");
+
+		if (!empty($wpdb->last_error)) {
+			error_log('SKC Fase 4: error agregando producto_id_ca: ' . $wpdb->last_error);
+			return false;
+		}
+	}
+
+	return true;
+}
+
+/**
  * Ejecuta migraciones una sola vez por version de esquema.
  */
 function skc_ejecutar_migraciones(): void
@@ -328,6 +350,14 @@ function skc_ejecutar_migraciones(): void
 			return;
 		}
 		$version_actual = '1.3.0';
+	}
+
+	if (version_compare($version_actual, '1.4.0', '<')) {
+		$resultado_fase_4 = skc_migrar_base_datos_fase_4();
+		if (!$resultado_fase_4) {
+			return;
+		}
+		$version_actual = '1.4.0';
 	}
 
 	if (version_compare($version_actual, SKC_DB_SCHEMA_VERSION, '>=')) {

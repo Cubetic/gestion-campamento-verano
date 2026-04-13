@@ -59,7 +59,12 @@ function skc_obtener_escuela_id_por_producto(int $product_id): ?int
 
     $escuela_id = $wpdb->get_var(
         $wpdb->prepare(
-            "SELECT id FROM {$tabla_escuelas} WHERE producto_id = %d ORDER BY activa DESC, id ASC LIMIT 1",
+            "SELECT id
+             FROM {$tabla_escuelas}
+             WHERE producto_id = %d OR producto_id_ca = %d
+             ORDER BY activa DESC, id ASC
+             LIMIT 1",
+            $product_id,
             $product_id
         )
     );

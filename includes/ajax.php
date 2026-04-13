@@ -96,7 +96,12 @@ function my_get_horarios_stock()
         if ($escuelas_existe) {
             $escuela_id = (int) $wpdb->get_var(
                 $wpdb->prepare(
-                    "SELECT id FROM {$tabla_escuelas} WHERE producto_id = %d ORDER BY activa DESC, id ASC LIMIT 1",
+                    "SELECT id
+                     FROM {$tabla_escuelas}
+                     WHERE producto_id = %d OR producto_id_ca = %d
+                     ORDER BY activa DESC, id ASC
+                     LIMIT 1",
+                    $product_id,
                     $product_id
                 )
             );

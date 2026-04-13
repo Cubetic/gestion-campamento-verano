@@ -33,7 +33,7 @@ function configurarEventListeners() {
     });
     
     // Cuando cambia el horario
-    $(document).on('change', 'input[name="horario"]', function() {
+    $(document).on('change', 'input[name="horario"], input[name="horari"], input[name^="horario"], input[name^="horari"]', function() {
       setTimeout(function() {
         contarBecasSeleccionadas();
         actualizarEstadoBecas();
@@ -41,7 +41,7 @@ function configurarEventListeners() {
     });
     
     // Cuando cambian las semanas seleccionadas
-    $(document).on('change', '.wapf-field-container input[type="checkbox"][name^="semanas"]', function() {
+    $(document).on('change', '.wapf-field-container input[type="checkbox"][name^="semanas"], .wapf-field-container input[type="checkbox"][name^="setmanes"]', function() {
       setTimeout(function() {
         contarBecasSeleccionadas();
         actualizarEstadoBecas();

@@ -23,6 +23,9 @@ const MONTHS_MAP = (window.misDatosAjax && misDatosAjax.monthsMap) ? misDatosAja
 
 // Texto a mostrar cuando no hay plazas, según el idioma
 const TEXT_SIN_PLAZAS = isCatalan ? ' (Sense places)' : ' (Sin plazas)';
+const SELECTOR_SEMANAS_FIELD = '.wapf-field-container.semanas, .wapf-field-container.setmanes';
+const SELECTOR_HORARIO_FIELD = '.wapf-field-container.wapf-field-radio.horario, .wapf-field-container.wapf-field-radio.horari';
+const SELECTOR_HORARIO_SIMPLE = '.wapf-field-container.horario, .wapf-field-container.horari';
   // ==================================================
   // 1) FUNCIÓN PARA UNIFICAR MESES DE CATALÁN A CASTELLANO
   // ==================================================
@@ -204,7 +207,7 @@ const TEXT_SIN_PLAZAS = isCatalan ? ' (Sense places)' : ' (Sin plazas)';
   // ==================================================
   function actualizarDisponibilidadSemanas() {
   
-    $('.wapf-field-container.semanas .wapf-checkable').each(function() {
+    $(`${SELECTOR_SEMANAS_FIELD} .wapf-checkable`).each(function() {
       const $container = $(this);
       const $checkbox = $container.find('input[type="checkbox"]');
       const $label = $container.find('span.wapf-label-text');
@@ -271,7 +274,7 @@ const TEXT_SIN_PLAZAS = isCatalan ? ' (Sense places)' : ' (Sin plazas)';
     // Identificar qué semanas están seleccionadas
     let semanasSeleccionadas = [];
   
-    $('.wapf-field-container.semanas .wapf-checkable input[type="checkbox"]:checked').each(function() {
+    $(`${SELECTOR_SEMANAS_FIELD} .wapf-checkable input[type="checkbox"]:checked`).each(function() {
       let textoSemana = $(this).closest('.wapf-checkable').find('span.wapf-label-text').text().trim();
       // Unificar a castellano antes de normalizar
       textoSemana = unificarMesesACastellano(textoSemana);
@@ -296,7 +299,7 @@ const TEXT_SIN_PLAZAS = isCatalan ? ' (Sense places)' : ' (Sin plazas)';
     });
 
     // Recopilamos todos los horarios visibles
-    $('.wapf-field-container.wapf-field-radio.horario:visible').each(function() {
+    $(`${SELECTOR_HORARIO_FIELD}:visible`).each(function() {
       const $horarioContainer = $(this);
       let horarioTitle = $horarioContainer.find('.wapf-field-label').text().trim();
       // Unificar a castellano
@@ -305,7 +308,7 @@ const TEXT_SIN_PLAZAS = isCatalan ? ' (Sense places)' : ' (Sin plazas)';
     
       // Extraer la fecha del título del horario (ej: "Horario del 25 al 27 de Junio" -> "25 al 27 de Junio")
       let fechaHorario = '';
-      const match = horarioTitle.match(/Horario del (.+)/i);
+      const match = horarioTitle.match(/(?:Horario|Horari)\s+del\s+(.+)/i);
       if (match && match[1]) {
         fechaHorario = match[1].trim();
       }
@@ -480,7 +483,7 @@ const TEXT_SIN_PLAZAS = isCatalan ? ' (Sense places)' : ' (Sin plazas)';
   function forzarDeshabilitacionElementosSinStock() {
   
     // Forzar deshabilitación SOLO de horarios sin plazas
-    $('.wapf-field-container.horario .wapf-checkable input[data-sin-stock="true"]').each(function() {
+    $(`${SELECTOR_HORARIO_SIMPLE} .wapf-checkable input[data-sin-stock="true"]`).each(function() {
       $(this).prop('disabled', true);
       $(this).closest('.wapf-checkable').addClass('opcion-sin-stock');
     
@@ -504,13 +507,13 @@ const TEXT_SIN_PLAZAS = isCatalan ? ' (Sense places)' : ' (Sin plazas)';
     });
   
     // Asegurarse de que los elementos CON plazas estén habilitados
-    $('.wapf-field-container.horario .wapf-checkable input[data-sin-stock="false"]').each(function() {
+    $(`${SELECTOR_HORARIO_SIMPLE} .wapf-checkable input[data-sin-stock="false"]`).each(function() {
       $(this).prop('disabled', false);
       $(this).closest('.wapf-checkable').removeClass('opcion-sin-stock');
     });
   
     // Caso especial para la semana del 31 de junio al 4 de julio
-    $('.wapf-field-container.horario').each(function() {
+    $(SELECTOR_HORARIO_SIMPLE).each(function() {
       const horarioTitle = $(this).find('.wapf-field-label').text().trim();
       // Unificar a castellano
       const horarioTitleCast = unificarMesesACastellano(horarioTitle);
@@ -543,10 +546,10 @@ const TEXT_SIN_PLAZAS = isCatalan ? ' (Sense places)' : ' (Sin plazas)';
   function limpiarMensajesSinPlazas() {
   
     // Limpiar todos los mensajes de horarios
-    $('.wapf-field-container.wapf-field-radio.horario .wapf-pricing-hint').text('');
-    $('.wapf-field-container.wapf-field-radio.horario input').prop('disabled', false);
-    $('.wapf-field-container.wapf-field-radio.horario .wapf-checkable').removeClass('opcion-sin-stock');
-    $('.wapf-field-container.wapf-field-radio.horario input').attr('data-sin-stock', 'false');
+    $(`${SELECTOR_HORARIO_FIELD} .wapf-pricing-hint`).text('');
+    $(`${SELECTOR_HORARIO_FIELD} input`).prop('disabled', false);
+    $(`${SELECTOR_HORARIO_FIELD} .wapf-checkable`).removeClass('opcion-sin-stock');
+    $(`${SELECTOR_HORARIO_FIELD} input`).attr('data-sin-stock', 'false');
   }
 
   // ==================================================
@@ -560,7 +563,7 @@ const TEXT_SIN_PLAZAS = isCatalan ? ' (Sense places)' : ' (Sin plazas)';
   });
 
   // Evento change para semanas
-  $('.semanas').on('change', 'input[type="checkbox"]', function() {
+  $(document).on('change', `${SELECTOR_SEMANAS_FIELD} input[type="checkbox"]`, function() {
     // Limpiar mensajes primero
     limpiarMensajesSinPlazas();
   

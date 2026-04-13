@@ -118,6 +118,83 @@ Una vez hayas añadido todos los campos de semanas y horarios:
 
 ---
 
+## Paso 5: Crear el Producto en Catalán (Ejemplo Exacto)
+
+Este paso es para cuando trabajas con **dos productos** para la misma escuela: uno en español y otro en catalán.
+
+### 5.1. Crear y vincular el producto CA
+
+1. Crea un nuevo producto en WooCommerce para catalán (por ejemplo: *Escola Kids&Us Sants*).
+2. Publica el producto y copia su ID en **Todos los productos**.
+3. Ve a **SportyKidsCamp > Escuelas > Editar escuela**.
+4. Pega ese ID en **Producto WooCommerce (ID CA)**.
+5. Guarda con **Actualizar escuela**.
+
+Con esto, el producto ES y el producto CA quedan asociados a la misma escuela y comparten stock.
+
+### 5.2. Configurar el campo de semanas en catalán
+
+En **Product input fields** del producto CA:
+
+1. Crea una **Casilla de verificación**.
+2. En **Etiqueta** escribe: `Setmanes`.
+3. Añade estas opciones (exactamente así):
+   - `22,23,25,26 juny`
+   - `29 de juny al 3 de juliol`
+   - `6 al 10 de juliol`
+   - `13 al 17 de juliol`
+4. En precio deja **El precio no cambia**.
+
+### 5.3. Configurar los horarios en catalán (uno por semana)
+
+Para cada semana, crea un campo **Botones de radio**.
+
+Importante: la etiqueta debe empezar por **Horari del** para que el plugin relacione correctamente semana y horario.
+
+Crea estos 4 campos:
+
+1. **Etiqueta:** `Horari del 22,23,25,26 juny`
+   - Opción 1: `9:00h a 13:00h`
+   - Opción 2: `9:00h a 16:00h`
+2. **Etiqueta:** `Horari del 29 de juny al 3 de juliol`
+   - Opción 1: `9:00h a 13:00h`
+   - Opción 2: `9:00h a 16:00h`
+3. **Etiqueta:** `Horari del 6 al 10 de juliol`
+   - Opción 1: `9:00h a 13:00h`
+   - Opción 2: `9:00h a 16:00h`
+4. **Etiqueta:** `Horari del 13 al 17 de juliol`
+   - Opción 1: `9:00h a 13:00h`
+   - Opción 2: `9:00h a 16:00h`
+
+En cada opción de horario:
+- **Ajustar precio:** Tarifa plana
+- **Cantidad del precio:** el precio correspondiente a ese horario
+
+### 5.4. Conditional logic (obligatoria) en cada horario
+
+En cada campo de radio, configura:
+
+1. **or add new rule group**
+2. Primer select: `Setmanes`
+3. Segundo select: `es igual a`
+4. Tercer select: la semana correspondiente al propio campo
+
+Ejemplo:
+- Campo `Horari del 6 al 10 de juliol`
+- Regla: `Setmanes` `es igual a` `6 al 10 de juliol`
+
+Nota de compatibilidad: el plugin acepta también `Semanas` y `Horario del`.
+
+### 5.5. Guardado final
+
+1. Pulsa **Actualizar** en el producto catalán.
+2. Verifica en la escuela que están informados:
+   - **Producto WooCommerce (ID)** (español)
+   - **Producto WooCommerce (ID CA)** (catalán)
+3. Con ambos IDs en la misma escuela, el stock queda unificado.
+
+---
+
 ## Resumen del Flujo
 
 ```
@@ -139,8 +216,8 @@ Escuela → Semanas (asociadas a la escuela)
 
 - **Nombres consistentes**: Asegúrate de usar exactamente los mismos nombres de semana en todos los pasos (Escuelas → Input Fields de producto).
 - **Formato de horarios**: Mantén un formato consistente (ej: `HH:00h a HH:00h`).
-- **Etiqueta de horarios**: Los campos de radio **deben comenzar con "Horario del"** para que funcione correctamente con la lógica condicionaly las validaciones del plugin.
-- **Lógica condicional**: Sin la lógica condicional, los campos de horario será verán en todos los casos. La regla "Semanas = [semana específica]" asegura que cada horario se muestre solo cuando se selecciona su semana correspondiente.
+- **Etiqueta de horarios**: Los campos de radio deben comenzar con **"Horario del"** o **"Horari del"** para que funcione correctamente con la lógica condicional y las validaciones del plugin.
+- **Lógica condicional**: Sin la lógica condicional, los campos de horario se verán en todos los casos. La regla **"Semanas/Setmanes = [semana específica]"** asegura que cada horario se muestre solo cuando se selecciona su semana correspondiente.
 
 ---
 
