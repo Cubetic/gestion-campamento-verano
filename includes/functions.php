@@ -91,10 +91,9 @@ function descontar_plazas($order_id)
             }
             error_log("📊 Horario encontrado (ID: {$horario->id}): Plazas disponibles: {$horario->plazas}, Plazas reservadas: {$horario->plazas_reservadas}");
 
-            // Verificar que haya plazas disponibles
+            // Permite reflejar sobreventa: si ya estaba en 0, baja a negativo y queda trazado.
             if ($horario->plazas <= 0) {
-                error_log("⚠️ No hay plazas disponibles para el horario ID {$horario->id}");
-                continue;
+                error_log("⚠️ Sobreventa detectada en horario ID {$horario->id}. Se registrará plaza negativa.");
             }
 
             // Descontar una plaza
