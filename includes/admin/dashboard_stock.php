@@ -98,22 +98,6 @@ function pagina_admin_gestion_campamento()
             ORDER BY s.id
         ", $escuela_id));
 
-    $render_stock_warning = static function (int $plazas): string {
-        if ($plazas < 0) {
-            return '<span style="color:#b32d2e;font-weight:700;">Sobreventa: ' . esc_html((string) $plazas) . ' plazas</span>';
-        }
-
-        if ($plazas === 0) {
-            return '<span style="color:#b32d2e;font-weight:700;">Sin plazas disponibles</span>';
-        }
-
-        if ($plazas === 1) {
-            return '<span style="color:#dba617;font-weight:700;">Ultima plaza disponible</span>';
-        }
-
-        return '<span style="color:#2271b1;">Disponibles: ' . esc_html((string) $plazas) . '</span>';
-    };
-
     ?>
     <div class="wrap">
         <h1>Gestión de Plazas por Semanas y Horarios</h1>
@@ -154,42 +138,29 @@ function pagina_admin_gestion_campamento()
                 <tbody>
                     <?php if (!empty($semanas)): ?>
                         <?php foreach ($semanas as $semana): ?>
-                            <?php
-                            $semana_id = (int) $semana->id;
-                            $plazas_manana = (int) $semana->plazas_manana;
-                            $plazas_completo = (int) $semana->plazas_completo;
-                            $reservas_manana = (int) $semana->reservas_manana;
-                            $reservas_completo = (int) $semana->reservas_completo;
-                            ?>
                             <tr>
                                 <td><?php echo esc_html($semana->semana); ?></td>
                                 <td>
-                                    <input type="text" id="total-<?php echo esc_attr($semana_id); ?>" value="<?php echo esc_attr(($plazas_manana + $reservas_manana + $plazas_completo + $reservas_completo)); ?>" readonly
+                                    <input type="text" value="<?php echo esc_attr(((int) $semana->plazas_manana + (int) $semana->reservas_manana + (int) $semana->plazas_completo + (int) $semana->reservas_completo)); ?>" readonly
                                         class="small-text" style="background-color: #f0f0f0;">
                                 </td>
                                 <td>
-                                    <input type="number" id="plazas-manana-<?php echo esc_attr($semana_id); ?>" name="semana[<?php echo $semana_id; ?>][plazas_manana]"
-                                        value="<?php echo esc_attr($plazas_manana); ?>" min="-999" class="small-text"
-                                        data-semana-id="<?php echo esc_attr($semana_id); ?>"
-                                        onchange="actualizarPlazasTotales(<?php echo esc_attr($semana_id); ?>)">
-                                    <div id="warning-manana-<?php echo esc_attr($semana_id); ?>" style="margin-top:4px;font-size:12px;">
-                                        <?php echo $render_stock_warning($plazas_manana); ?>
-                                    </div>
+                                    <input type="number" name="semana[<?php echo $semana->id; ?>][plazas_manana]"
+                                        value="<?php echo esc_attr((int) $semana->plazas_manana); ?>" min="0" class="small-text"
+                                        data-semana-id="<?php echo $semana->id; ?>"
+                                        onchange="actualizarPlazasTotales(<?php echo $semana->id; ?>)">
                                 </td>
                                 <td>
-                                    <strong id="reservas-manana-<?php echo esc_attr($semana_id); ?>"><?php echo esc_html((string) $reservas_manana); ?></strong>
+                                    <strong><?php echo intval($semana->reservas_manana); ?></strong>
                                 </td>
                                 <td>
-                                    <input type="number" id="plazas-completo-<?php echo esc_attr($semana_id); ?>" name="semana[<?php echo $semana_id; ?>][plazas_completo]"
-                                        value="<?php echo esc_attr($plazas_completo); ?>" min="-999" class="small-text"
-                                        data-semana-id="<?php echo esc_attr($semana_id); ?>"
-                                        onchange="actualizarPlazasTotales(<?php echo esc_attr($semana_id); ?>)">
-                                    <div id="warning-completo-<?php echo esc_attr($semana_id); ?>" style="margin-top:4px;font-size:12px;">
-                                        <?php echo $render_stock_warning($plazas_completo); ?>
-                                    </div>
+                                    <input type="number" name="semana[<?php echo $semana->id; ?>][plazas_completo]"
+                                        value="<?php echo esc_attr((int) $semana->plazas_completo); ?>" min="0" class="small-text"
+                                        data-semana-id="<?php echo $semana->id; ?>"
+                                        onchange="actualizarPlazasTotales(<?php echo $semana->id; ?>)">
                                 </td>
                                 <td>
-                                    <strong id="reservas-completo-<?php echo esc_attr($semana_id); ?>"><?php echo esc_html((string) $reservas_completo); ?></strong>
+                                    <strong><?php echo intval($semana->reservas_completo); ?></strong>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -208,64 +179,6 @@ function pagina_admin_gestion_campamento()
             <?php endif; ?>
         </form>
     </div>
-    <script>
-        (function () {
-            let formDirty = false;
-
-            function getWarningHtml(plazas) {
-                if (plazas < 0) {
-                    return '<span style="color:#b32d2e;font-weight:700;">Sobreventa: ' + plazas + ' plazas</span>';
-                }
-                if (plazas === 0) {
-                    return '<span style="color:#b32d2e;font-weight:700;">Sin plazas disponibles</span>';
-                }
-                if (plazas === 1) {
-                    return '<span style="color:#dba617;font-weight:700;">Ultima plaza disponible</span>';
-                }
-                return '<span style="color:#2271b1;">Disponibles: ' + plazas + '</span>';
-            }
-
-            window.actualizarPlazasTotales = function (semanaId) {
-                const mananaInput = document.getElementById('plazas-manana-' + semanaId);
-                const completoInput = document.getElementById('plazas-completo-' + semanaId);
-                const reservasMananaEl = document.getElementById('reservas-manana-' + semanaId);
-                const reservasCompletoEl = document.getElementById('reservas-completo-' + semanaId);
-                const totalInput = document.getElementById('total-' + semanaId);
-                const warningManana = document.getElementById('warning-manana-' + semanaId);
-                const warningCompleto = document.getElementById('warning-completo-' + semanaId);
-
-                const plazasManana = parseInt(mananaInput ? mananaInput.value : '0', 10) || 0;
-                const plazasCompleto = parseInt(completoInput ? completoInput.value : '0', 10) || 0;
-                const reservasManana = parseInt(reservasMananaEl ? reservasMananaEl.textContent : '0', 10) || 0;
-                const reservasCompleto = parseInt(reservasCompletoEl ? reservasCompletoEl.textContent : '0', 10) || 0;
-
-                if (totalInput) {
-                    totalInput.value = plazasManana + reservasManana + plazasCompleto + reservasCompleto;
-                }
-
-                if (warningManana) {
-                    warningManana.innerHTML = getWarningHtml(plazasManana);
-                }
-                if (warningCompleto) {
-                    warningCompleto.innerHTML = getWarningHtml(plazasCompleto);
-                }
-            };
-
-            document.querySelectorAll('input[type="number"][data-semana-id]').forEach(function (input) {
-                input.addEventListener('input', function () {
-                    formDirty = true;
-                    const semanaId = this.getAttribute('data-semana-id');
-                    actualizarPlazasTotales(semanaId);
-                });
-            });
-
-            setInterval(function () {
-                if (!formDirty && document.activeElement && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
-                    window.location.reload();
-                }
-            }, 30000);
-        })();
-    </script>
     <?php
 }
 
