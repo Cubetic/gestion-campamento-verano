@@ -9,6 +9,15 @@ if (!defined('ABSPATH')) {
 }
 
  
+if (isset($_GET['exportar_csv_v2']) && $_GET['exportar_csv_v2'] === 'true') {
+    error_log('Exportación CSV v2 iniciada.');
+    if (current_user_can('manage_options')) {
+        exportar_csv_funcion_v2();
+    } else {
+        wp_die('No tienes permisos para realizar esta acción.');
+    }
+}
+
 if (isset($_GET['exportar_csv']) && $_GET['exportar_csv'] === 'true') {
     error_log('Exportación CSV iniciada.'); // Verifica que esta línea se ejecute
     // Verifica permisos
@@ -174,6 +183,29 @@ if (isset($_POST['guardar_cambios'])) {
 <div class="wrap">
     <h1>Reservas de Sportu Kids Camp </h1>
 <a href="<?php echo esc_url(add_query_arg('exportar_csv', 'true')); ?>" class="button">Exportar CSV</a>
+
+<?php
+// Selector de escuela para exportar CSV v2 por escuela
+global $wpdb;
+$escuelas_selector = $wpdb->get_results( "SELECT id, nombre FROM {$wpdb->prefix}skc_escuelas ORDER BY nombre ASC" );
+if ( ! empty( $escuelas_selector ) ) :
+    // Preservar parámetros admin actuales (page=...) en el form
+    $current_page_param = isset( $_GET['page'] ) ? sanitize_text_field( $_GET['page'] ) : '';
+?>
+<form method="get" action="" style="display:inline-block; margin-left:12px;">
+    <?php if ( $current_page_param ) : ?>
+        <input type="hidden" name="page" value="<?php echo esc_attr( $current_page_param ); ?>">
+    <?php endif; ?>
+    <input type="hidden" name="exportar_csv_v2" value="true">
+    <select name="escuela_id" style="vertical-align:middle;">
+        <option value="">-- Selecciona escuela --</option>
+        <?php foreach ( $escuelas_selector as $esc ) : ?>
+            <option value="<?php echo esc_attr( $esc->id ); ?>"><?php echo esc_html( $esc->nombre ); ?></option>
+        <?php endforeach; ?>
+    </select>
+    <button type="submit" class="button button-primary" style="vertical-align:middle;">Exportar CSV por escuela</button>
+</form>
+<?php endif; ?>
     <?php
     // Distinguimos entre "editar un pedido" o "listar pedidos"
     if (isset($_GET['editar_pedido']) && !empty($_GET['editar_pedido'])) {
@@ -487,33 +519,12 @@ function obtener_semanas_disponibles()
     return $results; // Array de objetos con ->semana_id y ->nombre_semana
 }
 
-
-function exportar_csv_funcion()
+/**
+ * Fase 1 (legacy): centraliza las cabeceras fijas actuales para mantener el mismo CSV.
+ */
+function skc_csv_get_cabeceras_legacy(): array
 {
-
-    if (!current_user_can('manage_options')) {
-        wp_die('No tienes permisos para realizar esta acción.');
-    }
-
-    // Definir el nombre del archivo
-    $nombre_archivo = 'reservas_pedidos_' . date('Y-m-d') . '.csv';
-
-    // Configurar cabeceras para descarga
-    header('Content-Type: text/csv; charset=UTF-8');
-    header('Content-Disposition: attachment; filename="' . $nombre_archivo . '"');
-
-    // Asegurarse de que no haya salida previa
-    ob_clean();
-    flush();
-
-    // Abrir el archivo para escribir
-    $output = fopen('php://output', 'w');
-
-    // Asegurar codificación UTF-8 para caracteres especiales
-    fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
-
-    // Definir las cabeceras del CSV
-    $cabeceras = [
+    return [
         'Num Suscripció',
         'Data Suscripció',
         'Nom Nen/a',
@@ -577,20 +588,14 @@ function exportar_csv_funcion()
         'Suma de (S6) 9h-17h beca',
         'Suma de (S6) Acoll'
     ];
+}
 
-    // Escribir las cabeceras
-    fputcsv($output, $cabeceras);
-
-    // Obtener todos los pedidos
-    $args = [
-       'status' => ['processing', 'completed'],
-    'limit'  => -1,
-    'type'   => 'shop_order'
-    ];
-    $pedidos = wc_get_orders($args);
-    // Mapeo de semanas en castellano y catalán
-    // Mapeo de semanas en castellano a S1, S2, S3, etc.
-    $semanas_mapeo = [  
+/**
+ * Fase 1 (legacy): mantiene el mapeo historico de etiquetas de semana a S1..S6.
+ */
+function skc_csv_get_semanas_mapeo_legacy(): array
+{
+    return [
         //Semana 1
         '25 al 27 de junio' => 'S1',
         '25 al 27 junio' => 'S1',
@@ -613,8 +618,8 @@ function exportar_csv_funcion()
         '14 al 18 de juliol' => 'S4',
         '14 al 18 juliol' => 'S4',
         '14 al 18 julio' => 'S4',
-         
-         //Semana 5
+
+        //Semana 5
         '21 al 25 de julio' => 'S5',
         '21 al 25 de juliol' => 'S5',
         '21 al 25 julio' => 'S5',
@@ -626,164 +631,424 @@ function exportar_csv_funcion()
         '28 de juliol al 1 agost' => 'S6',
         '28 de juliol al 1 de agost' => 'S6',
     ];
+}
+
+/**
+ * Fase 1 (legacy): calcula el pendiente exactamente con la regla actual.
+ */
+function skc_csv_total_pendiente_legacy($fracciones): int
+{
+    $total_pendiente = 0;
+
+    if (!empty($fracciones) && is_array($fracciones)) {
+        foreach ($fracciones as $fraccion) {
+            if (isset($fraccion['estado']) && $fraccion['estado'] === 'pendiente') {
+                $total_pendiente += $fraccion['importe'];
+            }
+        }
+    }
+
+    return $total_pendiente;
+}
+
+/**
+ * Fase 1 (legacy): inicia la matriz fija de semanas/opciones del CSV historico.
+ */
+function skc_csv_inicializar_datos_semana_legacy(): array
+{
+    return [
+        'S1' => ['9h-17h' => '0', '9h-14:30h' => '0', '9h-17h-beca' => '0', 'acoll' => '0'],
+        'S2' => ['9h-17h' => '0', '9h-14:30h' => '0', '9h-17h-beca' => '0', 'acoll' => '0'],
+        'S3' => ['9h-17h' => '0', '9h-14:30h' => '0', '9h-17h-beca' => '0', 'acoll' => '0'],
+        'S4' => ['9h-17h' => '0', '9h-14:30h' => '0', '9h-17h-beca' => '0', 'acoll' => '0'],
+        'S5' => ['9h-17h' => '0', '9h-14:30h' => '0', '9h-17h-beca' => '0', 'acoll' => '0'],
+        'S6' => ['9h-17h' => '0', '9h-14:30h' => '0', '9h-17h-beca' => '0', 'acoll' => '0']
+    ];
+}
+
+/**
+ * Fase 1 (legacy): traduce plazas_reservadas a columnas S1..S6 y mantiene orden fijo.
+ */
+function skc_csv_append_semanas_legacy(array &$fila, $semanas_reservadas, array $semanas_mapeo): void
+{
+    $datos_semana_excel = skc_csv_inicializar_datos_semana_legacy();
+    $orden_semanas = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'];
+    $orden_opciones = ['9h-17h', '9h-14:30h', '9h-17h-beca', 'acoll'];
+
+    if (!empty($semanas_reservadas)) {
+        foreach ($semanas_reservadas as $semana => $datos_semana) {
+            $semana_mapeada = isset($semanas_mapeo[$semana]) ? $semanas_mapeo[$semana] : null;
+            if ($semana_mapeada) {
+                if (isset($datos_semana['horario']) && $datos_semana['horario'] === 'completo') {
+                    $datos_semana_excel[$semana_mapeada]['9h-17h'] = '1';
+                } else {
+                    $datos_semana_excel[$semana_mapeada]['9h-17h'] = '0';
+                    $datos_semana_excel[$semana_mapeada]['9h-14:30h'] = '1';
+                }
+                if (isset($datos_semana['acogida']) && $datos_semana['acogida'] === 'Si') {
+                    $datos_semana_excel[$semana_mapeada]['acoll'] = '1';
+                }
+                if (isset($datos_semana['beca']) && $datos_semana['beca'] === 'Si') {
+                    $datos_semana_excel[$semana_mapeada]['9h-17h-beca'] = '1';
+                }
+            }
+        }
+    }
+
+    foreach ($orden_semanas as $semana_key) {
+        if (isset($datos_semana_excel[$semana_key])) {
+            $datos_internos = $datos_semana_excel[$semana_key];
+            foreach ($orden_opciones as $opcion_key) {
+                $fila[] = isset($datos_internos[$opcion_key]) ? $datos_internos[$opcion_key] : '0';
+            }
+        } else {
+            foreach ($orden_opciones as $opcion_key) {
+                $fila[] = '0';
+            }
+        }
+    }
+}
+
+/**
+ * Bloque comun de columnas no dinamicas compartidas por legacy y v2.
+ */
+function skc_csv_construir_fila_base_comun($pedido): array
+{
+    $id_pedido = $pedido->get_id();
+    $fila = [];
+
+    $fila[] = $id_pedido;
+    $fila[] = $pedido->get_date_created() ? $pedido->get_date_created()->format('Y-m-d H:i:s') : 'no';
+
+    $datos_alumno = $pedido->get_meta('datos_alumno');
+    $es_datos_alumno_valido = is_array($datos_alumno);
+
+    if (!$es_datos_alumno_valido) {
+        error_log("Advertencia: datos_alumno no es un array para Pedido ID: " . $id_pedido . ". Tipo recibido: " . gettype($datos_alumno));
+    }
+
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['nombre_alumno']) : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['apellido_alumno']) : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['fecha_nacimiento']) : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['nombre_tutor']) : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['apellido_tutor']) : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['email_tutor']) : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['telefono_tutor']) : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['dni_tutor']) : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['nombre_tutor_2']) : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['apellido_tutor_2']) : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['email_tutor_2']) : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['telefono_tutor_2']) : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['direccion_tutor']) : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['ciudad_tutor']) : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['codigo_postal_tutor']) : 'no';
+
+    $fila[] = 'no';
+    $fila[] = 'Redsys';
+
+    $tiene_beca = 'no';
+    $codigo_para_fila = '';
+    if ($es_datos_alumno_valido && !empty($datos_alumno['codigo_idalu'])) {
+        $tiene_beca = 'si';
+        $codigo_para_fila = $datos_alumno['codigo_idalu'];
+    }
+    $fila[] = $tiene_beca;
+    $fila[] = $codigo_para_fila;
+
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['tiene_discapacidad'] ?? 'no') : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['detalle_discapacidad'] ?? 'no') : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['numero_tarjeta_sanitaria'] ?? 'no') : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['compania_seguro'] ?? 'no') : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['vacunado'] ?? 'no') : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['tiene_alergias'] ?? 'no') : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['detalle_alergias'] ?? 'no') : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['escuela_procedencia'] ?? 'no') : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['escuela_procedencia_otra'] ?? '') : '';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['alumno_kids_us'] ?? 'no') : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['nombre_amigo_campamento'] ?? 'no') : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['necesita_flotador'] ?? 'no') : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['necesita_siesta'] ?? 'no') : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['redes_sociales'] ?? 'no') : 'no';
+    $fila[] = $es_datos_alumno_valido ? ($datos_alumno['img_administrativas'] ?? 'no') : 'no';
+
+    $fila[] = $pedido->get_total() ?: '0';
+    $fracciones = $pedido->get_meta('fracciones');
+    $total_pendiente = skc_csv_total_pendiente_legacy($fracciones);
+    $fila[] = $total_pendiente > 0 ? $total_pendiente : '0';
+
+    return $fila;
+}
+
+/**
+ * Fase 1 (legacy): construye la fila del pedido manteniendo exactamente el formato actual.
+ */
+function skc_csv_construir_fila_legacy($pedido, array $semanas_mapeo): array
+{
+    $fila = skc_csv_construir_fila_base_comun($pedido);
+
+    $semanas_reservadas = $pedido->get_meta('plazas_reservadas');
+    skc_csv_append_semanas_legacy($fila, $semanas_reservadas, $semanas_mapeo);
+
+    return $fila;
+}
+
+/**
+ * Fase 2 (v2): cabeceras base comunes previas a columnas dinamicas.
+ */
+function skc_csv_get_cabeceras_base_comun(): array
+{
+    return array_slice(skc_csv_get_cabeceras_legacy(), 0, 38);
+}
+
+/**
+ * Fase 2 (v2): obtiene los pedidos con el mismo criterio de export legacy.
+ */
+function skc_csv_get_pedidos_exportacion(): array
+{
+    $args = [
+        'status' => ['processing', 'completed'],
+        'limit'  => -1,
+        'type'   => 'shop_order'
+    ];
+
+    return wc_get_orders($args);
+}
+
+/**
+ * Fase 2 (v2): cachea nombres de escuela para etiquetas de columnas dinamicas.
+ */
+function skc_csv_get_escuelas_lookup(): array
+{
+    global $wpdb;
+    $tabla_escuelas = $wpdb->prefix . 'skc_escuelas';
+
+    $existe_tabla = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $tabla_escuelas)) === $tabla_escuelas;
+    if (!$existe_tabla) {
+        return [];
+    }
+
+    $rows = $wpdb->get_results("SELECT id, nombre FROM {$tabla_escuelas}", ARRAY_A);
+    $lookup = [];
+
+    foreach ((array) $rows as $row) {
+        $lookup[(int) $row['id']] = (string) $row['nombre'];
+    }
+
+    return $lookup;
+}
+
+/**
+ * Fase 2 (v2): etiqueta legible y estable para escuela.
+ */
+function skc_csv_get_etiqueta_escuela(int $escuela_id, array $escuelas_lookup): string
+{
+    if ($escuela_id > 0 && isset($escuelas_lookup[$escuela_id]) && $escuelas_lookup[$escuela_id] !== '') {
+        return $escuelas_lookup[$escuela_id];
+    }
+
+    if ($escuela_id > 0) {
+        return 'Escuela ID ' . $escuela_id;
+    }
+
+    return 'Escuela sin identificar';
+}
+
+/**
+ * Fase 2 (v2): construye y ordena las columnas dinamicas segun reservas reales.
+ */
+function skc_csv_build_columnas_dinamicas_v2(array $pedidos): array
+{
+    $escuelas_lookup = skc_csv_get_escuelas_lookup();
+    $columnas = [];
 
     foreach ($pedidos as $pedido) {
-        $id_pedido = $pedido->get_id();
-
-        // Inicializar array para almacenar los datos de cada fila
-        $fila = [];
-
-        // Datos básicos del pedido
-        $fila[] = $id_pedido; // Num Suscripció
-        $fila[] = $pedido->get_date_created() ? $pedido->get_date_created()->format('Y-m-d H:i:s') : 'no'; // Data Suscripció (Añadida verificación)
-
-        // Datos del alumno
-        $datos_alumno = $pedido->get_meta('datos_alumno');  
-        $es_datos_alumno_valido = is_array($datos_alumno); // Variable de control
-
-
-        if (!$es_datos_alumno_valido) {  
-            error_log("Advertencia: datos_alumno no es un array para Pedido ID: " . $id_pedido . ". Tipo recibido: " . gettype($datos_alumno));  
-        }  
-        // --- Fin Validación ---  
-  
-        // --- Acceso Seguro a datos_alumno ---  
-        // Usamos la variable $es_datos_alumno_valido para decidir si acceder o usar default  
-  
-        // Datos del alumno  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['nombre_alumno']) : 'no'; // Nom Nen/a  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['apellido_alumno']) : 'no'; // Cognoms Nen/a  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['fecha_nacimiento']) : 'no'; // Data Naixement Nen/a  
-  
-        // Datos del tutor principal  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['nombre_tutor']) : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['apellido_tutor']) : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['email_tutor']) : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['telefono_tutor']) : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['dni_tutor']) : 'no';  
-  
-        // Información del tutor secundario  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['nombre_tutor_2']) : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['apellido_tutor_2']) : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['email_tutor_2']) : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['telefono_tutor_2']) : 'no';  
-  
-        // Dirección  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['direccion_tutor']) : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['ciudad_tutor']) : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['codigo_postal_tutor']) : 'no';  
-  
-        // Notas y forma de pago  
-        $fila[] = 'no'; // Nota Client (Original comentado) - Si lo usas, verifica $pedido->get_customer_note()  
-        $fila[] = 'Redsys'; // Forma de pagament  
-  
-        // Información de beca (codigo_idalu)  
-        $tiene_beca = 'no';  
-        $codigo_para_fila = '';  
-        // Solo intentamos la lógica si $datos_alumno es válido  
-        if ($es_datos_alumno_valido && !empty($datos_alumno['codigo_idalu'])) {  
-            $tiene_beca = 'si';  
-            $codigo_para_fila = $datos_alumno['codigo_idalu']; // Ya sabemos que existe y no está vacío  
-        }  
-        $fila[] = $tiene_beca;  
-        $fila[] = $codigo_para_fila;  
-  
-        // Información de salud  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['tiene_discapacidad'] ?? 'no') : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['detalle_discapacidad'] ?? 'no') : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['numero_tarjeta_sanitaria'] ?? 'no') : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['compania_seguro'] ?? 'no') : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['vacunado'] ?? 'no') : 'no'; // El ?? maneja si existe o no  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['tiene_alergias'] ?? 'no') : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['detalle_alergias'] ?? 'no') : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['escuela_procedencia'] ?? 'no') : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['escuela_procedencia_otra'] ?? '') : ''; // Default ''  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['alumno_kids_us'] ?? 'no') : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['nombre_amigo_campamento'] ?? 'no') : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['necesita_flotador'] ?? 'no') : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['necesita_siesta'] ?? 'no') : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['redes_sociales'] ?? 'no') : 'no';  
-        $fila[] = $es_datos_alumno_valido ? ($datos_alumno['img_administrativas'] ?? 'no') : 'no';  
-  
-        // --- Fin Acceso Seguro ---  
-  
-        // Datos finales del pedido (asumimos seguros, pero podrías añadir `?: '0'`)  
-        $fila[] = $pedido->get_total() ?: '0'; // Suma de Cost Camp/Setmana  
-        // Obtener el meta 'fracciones'  
-        $fracciones = $pedido->get_meta('fracciones');  
-  
-// Inicializar la variable para el total pendiente  
-$total_pendiente = 0;  
-  
-// Verificar si 'fracciones' existe y es un array  
-if (!empty($fracciones) && is_array($fracciones)) {  
-    foreach ($fracciones as $fraccion) {  
-        if (isset($fraccion['estado']) && $fraccion['estado'] === 'pendiente') {  
-            $total_pendiente += $fraccion['importe']; // Sumar el importe de las fracciones pendientes  
-        }  
-    }  
-}  
- 
-  
-// Asignar el total pendiente a $fila[]  
-$fila[] = $total_pendiente > 0 ? $total_pendiente : '0';
-
-        // Inicializar los datos de las semanas
-        $datos_semana_excel = [
-            'S1' => ['9h-17h' => '0', '9h-14:30h' => '0', '9h-17h-beca' => '0', 'acoll' => '0'],
-            'S2' => ['9h-17h' => '0', '9h-14:30h' => '0', '9h-17h-beca' => '0', 'acoll' => '0'],
-            'S3' => ['9h-17h' => '0', '9h-14:30h' => '0', '9h-17h-beca' => '0', 'acoll' => '0'],
-            'S4' => ['9h-17h' => '0', '9h-14:30h' => '0', '9h-17h-beca' => '0', 'acoll' => '0'],
-            'S5' => ['9h-17h' => '0', '9h-14:30h' => '0', '9h-17h-beca' => '0', 'acoll' => '0'],
-            'S6' => ['9h-17h' => '0', '9h-14:30h' => '0', '9h-17h-beca' => '0', 'acoll' => '0']
-        ];
-
-        // 1. Definir el orden consistente para asegurar columnas correctas en el CSV  
-        $orden_semanas = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'];
-        $orden_opciones = ['9h-17h', '9h-14:30h', '9h-17h-beca', 'acoll'];
-
         $semanas_reservadas = $pedido->get_meta('plazas_reservadas');
-        // Procesar las semanas reservadas
-        if (!empty($semanas_reservadas)) {
-            foreach ($semanas_reservadas as $semana => $datos_semana) {
-                // Mapear la semana a su identificador S1, S2, etc.
-                $semana_mapeada = isset($semanas_mapeo[$semana]) ? $semanas_mapeo[$semana] : null;
-                if ($semana_mapeada) {
-                    // Actualizamos las celdas correspondientes según la semana
-                    if (isset($datos_semana['horario']) && $datos_semana['horario'] === 'completo') {
-                        $datos_semana_excel[$semana_mapeada]['9h-17h'] = '1';
-                    }else{
-                        $datos_semana_excel[$semana_mapeada]['9h-17h'] = '0';
-                        $datos_semana_excel[$semana_mapeada]['9h-14:30h'] = '1';
-                    }
-                    if (isset($datos_semana['acogida']) && $datos_semana['acogida'] === 'Si') {
-                        $datos_semana_excel[$semana_mapeada]['acoll'] = '1';
-                    }
-                    if (isset($datos_semana['beca']) && $datos_semana['beca'] === 'Si') {
-                        $datos_semana_excel[$semana_mapeada]['9h-17h-beca'] = '1';
-                    }
-                }
-            }
+        if (empty($semanas_reservadas) || !is_array($semanas_reservadas)) {
+            continue;
         }
 
-        // 2. Iterar sobre las semanas y opciones en el orden definido  
-        foreach ($orden_semanas as $semana_key) {
-            // Verificar si la clave de la semana (ej. 'S1') existe en $datos_semana  
-            if (isset($datos_semana_excel[$semana_key])) {
-                $datos_internos = $datos_semana_excel[$semana_key];
-                // Iterar sobre las opciones definidas para esa semana  
-                foreach ($orden_opciones as $opcion_key) {
-                    // Añadir el valor a $fila. Usar '0' como default si la opción específica no existe.  
-                    $fila[] = isset($datos_internos[$opcion_key]) ? $datos_internos[$opcion_key] : '0';
-                }
-            } else {
-                // Si la clave de la semana completa (ej. 'S3') no existe en $datos_semana,  
-                // añadir valores por defecto ('0') para todas sus opciones para mantener la estructura del CSV.  
-                foreach ($orden_opciones as $opcion_key) {
-                    $fila[] = '0';
-                }
+        foreach ($semanas_reservadas as $semana_label => $datos_semana) {
+            $semana = trim((string) $semana_label);
+            if ($semana === '') {
+                continue;
+            }
+
+            $escuela_id = isset($datos_semana['escuela_id']) ? absint($datos_semana['escuela_id']) : 0;
+            $escuela_etiqueta = skc_csv_get_etiqueta_escuela($escuela_id, $escuelas_lookup);
+            $horario = isset($datos_semana['horario']) ? trim((string) $datos_semana['horario']) : '';
+            if ($horario === '') {
+                $horario = 'sin_horario';
+            }
+
+            $key_reserva = 'reserva|' . $escuela_id . '|' . $semana . '|' . $horario;
+            $columnas[$key_reserva] = [
+                'key' => $key_reserva,
+                'escuela' => $escuela_etiqueta,
+                'semana' => $semana,
+                'tipo' => 'reserva',
+                'horario' => $horario,
+                'header' => 'Reserva - Escuela: ' . $escuela_etiqueta . ' | Semana: ' . $semana . ' | Horario: ' . $horario,
+            ];
+
+            $key_beca = 'beca|' . $escuela_id . '|' . $semana;
+            $columnas[$key_beca] = [
+                'key' => $key_beca,
+                'escuela' => $escuela_etiqueta,
+                'semana' => $semana,
+                'tipo' => 'beca',
+                'horario' => '',
+                'header' => 'Beca - Escuela: ' . $escuela_etiqueta . ' | Semana: ' . $semana,
+            ];
+
+            $key_acogida = 'acogida|' . $escuela_id . '|' . $semana;
+            $columnas[$key_acogida] = [
+                'key' => $key_acogida,
+                'escuela' => $escuela_etiqueta,
+                'semana' => $semana,
+                'tipo' => 'acogida',
+                'horario' => '',
+                'header' => 'Acogida - Escuela: ' . $escuela_etiqueta . ' | Semana: ' . $semana,
+            ];
+        }
+    }
+
+    $columnas = array_values($columnas);
+    usort($columnas, static function (array $a, array $b): int {
+        $cmp_escuela = strcasecmp($a['escuela'], $b['escuela']);
+        if ($cmp_escuela !== 0) {
+            return $cmp_escuela;
+        }
+
+        $cmp_semana = strcasecmp($a['semana'], $b['semana']);
+        if ($cmp_semana !== 0) {
+            return $cmp_semana;
+        }
+
+        $prioridad = ['reserva' => 1, 'beca' => 2, 'acogida' => 3];
+        $pa = $prioridad[$a['tipo']] ?? 99;
+        $pb = $prioridad[$b['tipo']] ?? 99;
+        if ($pa !== $pb) {
+            return $pa <=> $pb;
+        }
+
+        return strcasecmp($a['horario'], $b['horario']);
+    });
+
+    $column_keys = [];
+    $column_headers = [];
+    foreach ($columnas as $columna) {
+        $column_keys[] = $columna['key'];
+        $column_headers[] = $columna['header'];
+    }
+
+    return [
+        'keys' => $column_keys,
+        'headers' => $column_headers,
+    ];
+}
+
+/**
+ * Fase 2 (v2): completa valores dinamicos por escuela/semana/horario para un pedido.
+ */
+function skc_csv_append_semanas_dinamicas_v2(array &$fila, $semanas_reservadas, array $column_keys): void
+{
+    $valores = [];
+    foreach ($column_keys as $key) {
+        $valores[$key] = '0';
+    }
+
+    if (!empty($semanas_reservadas) && is_array($semanas_reservadas)) {
+        foreach ($semanas_reservadas as $semana_label => $datos_semana) {
+            $semana = trim((string) $semana_label);
+            if ($semana === '') {
+                continue;
+            }
+
+            $escuela_id = isset($datos_semana['escuela_id']) ? absint($datos_semana['escuela_id']) : 0;
+            $horario = isset($datos_semana['horario']) ? trim((string) $datos_semana['horario']) : '';
+            if ($horario === '') {
+                $horario = 'sin_horario';
+            }
+
+            $key_reserva = 'reserva|' . $escuela_id . '|' . $semana . '|' . $horario;
+            if (array_key_exists($key_reserva, $valores)) {
+                $valores[$key_reserva] = '1';
+            }
+
+            $key_beca = 'beca|' . $escuela_id . '|' . $semana;
+            if (array_key_exists($key_beca, $valores) && isset($datos_semana['beca']) && $datos_semana['beca'] === 'Si') {
+                $valores[$key_beca] = '1';
+            }
+
+            $key_acogida = 'acogida|' . $escuela_id . '|' . $semana;
+            if (array_key_exists($key_acogida, $valores) && isset($datos_semana['acogida']) && $datos_semana['acogida'] === 'Si') {
+                $valores[$key_acogida] = '1';
             }
         }
+    }
+
+    foreach ($column_keys as $key) {
+        $fila[] = $valores[$key] ?? '0';
+    }
+}
+
+/**
+ * Fase 2 (v2): construye fila base + columnas dinamicas.
+ */
+function skc_csv_construir_fila_v2($pedido, array $column_keys): array
+{
+    $fila = skc_csv_construir_fila_base_comun($pedido);
+    $semanas_reservadas = $pedido->get_meta('plazas_reservadas');
+    skc_csv_append_semanas_dinamicas_v2($fila, $semanas_reservadas, $column_keys);
+
+    return $fila;
+}
+
+
+function exportar_csv_funcion()
+{
+
+    if (!current_user_can('manage_options')) {
+        wp_die('No tienes permisos para realizar esta acción.');
+    }
+
+    // Definir el nombre del archivo
+    $nombre_archivo = 'reservas_pedidos_' . date('Y-m-d') . '.csv';
+
+    // Configurar cabeceras para descarga
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="' . $nombre_archivo . '"');
+
+    // Asegurarse de que no haya salida previa
+    ob_clean();
+    flush();
+
+    // Abrir el archivo para escribir
+    $output = fopen('php://output', 'w');
+
+    // Asegurar codificación UTF-8 para caracteres especiales
+    fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+    // Fase 1: las cabeceras salen de helper para poder refactorizar sin cambiar formato.
+    $cabeceras = skc_csv_get_cabeceras_legacy();
+
+    // Escribir las cabeceras
+    fputcsv($output, $cabeceras);
+
+    // Obtener todos los pedidos
+    $args = [
+       'status' => ['processing', 'completed'],
+    'limit'  => -1,
+    'type'   => 'shop_order'
+    ];
+    $pedidos = wc_get_orders($args);
+    // Fase 1: mismo mapeo historico, movido a helper para reutilizacion controlada.
+    $semanas_mapeo = skc_csv_get_semanas_mapeo_legacy();
+
+    foreach ($pedidos as $pedido) {
+        // Fase 1: se construye la fila usando helper legacy para separar responsabilidades.
+        $fila = skc_csv_construir_fila_legacy($pedido, $semanas_mapeo);
+
         // Escribir la fila en el CSV
         fputcsv($output, $fila);
 
@@ -791,6 +1056,196 @@ $fila[] = $total_pendiente > 0 ? $total_pendiente : '0';
 }
 
     fclose($output);
+    exit;
+}
+
+/**
+ * Fase 2 (v2): exporta CSV filtrado por escuela.
+ * Columnas dinamicas construidas desde wp_semanas_campamento + wp_horarios_semana.
+ * Una columna por combinacion semana+horario. Valor: 1 si reservado, vacio si no.
+ */
+function exportar_csv_funcion_v2()
+{
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_die( 'No tienes permisos para realizar esta acción.' );
+    }
+
+    $escuela_id = isset( $_GET['escuela_id'] ) ? absint( $_GET['escuela_id'] ) : 0;
+    if ( ! $escuela_id ) {
+        wp_die( 'Debes seleccionar una escuela para exportar.' );
+    }
+
+    global $wpdb;
+
+    // Obtener nombre y product_id/product_id_ca de la escuela
+    $escuela = $wpdb->get_row( $wpdb->prepare(
+        "SELECT nombre, product_id, product_id_ca FROM {$wpdb->prefix}skc_escuelas WHERE id = %d",
+        $escuela_id
+    ) );
+    $nombre_escuela = $escuela ? $escuela->nombre : 'escuela_' . $escuela_id;
+    $slug_archivo   = sanitize_title( $nombre_escuela );
+    $product_id     = $escuela ? (int) $escuela->product_id : 0;
+    $product_id_ca  = $escuela ? (int) $escuela->product_id_ca : 0;
+
+    // Obtener semanas de esta escuela ordenadas por ID
+    $semanas = $wpdb->get_results( $wpdb->prepare(
+        "SELECT id, semana FROM {$wpdb->prefix}semanas_campamento WHERE escuela_id = %d ORDER BY id ASC",
+        $escuela_id
+    ) );
+
+    if ( empty( $semanas ) ) {
+        wp_die( 'Esta escuela no tiene semanas configuradas.' );
+    }
+
+    // Construir listado de columnas dinamicas por semana en orden legacy:
+    // horario 1, horario 2, ..., beca, acogida.
+    // Keys canónicas para cruces robustos: semana_id||tipo_horario, semana_id||beca, semana_id||acogida.
+    $columnas = [];
+    $indice_semana = 1;
+    foreach ( $semanas as $semana ) {
+        $horarios = $wpdb->get_results( $wpdb->prepare(
+            "SELECT tipo_horario, nombre_horario FROM {$wpdb->prefix}horarios_semana WHERE semana_id = %d ORDER BY id ASC",
+            $semana->id
+        ) );
+
+        foreach ( $horarios as $horario ) {
+            $nombre_horario = trim( (string) $horario->nombre_horario );
+            if ( $nombre_horario === '' ) {
+                $nombre_horario = (string) $horario->tipo_horario;
+            }
+
+            $columnas[] = [
+                'semana_id'      => (int) $semana->id,
+                'semana_label'   => $semana->semana,
+                'tipo_horario'   => (string) $horario->tipo_horario,
+                'nombre_horario' => (string) $horario->nombre_horario,
+                'key'            => (int) $semana->id . '||' . (string) $horario->tipo_horario,
+                'header'         => 'Suma de (S' . $indice_semana . ') ' . $nombre_horario,
+                'tipo_columna'   => 'horario',
+            ];
+        }
+
+        $columnas[] = [
+            'semana_id'    => (int) $semana->id,
+            'key'          => (int) $semana->id . '||beca',
+            'header'       => 'Suma de (S' . $indice_semana . ') beca',
+            'tipo_columna' => 'beca',
+        ];
+
+        $columnas[] = [
+            'semana_id'    => (int) $semana->id,
+            'key'          => (int) $semana->id . '||acogida',
+            'header'       => 'Suma de (S' . $indice_semana . ') Acoll',
+            'tipo_columna' => 'acogida',
+        ];
+
+        $indice_semana++;
+    }
+
+    if ( empty( $columnas ) ) {
+        wp_die( 'Esta escuela no tiene horarios configurados en sus semanas.' );
+    }
+
+    // Filtrar pedidos que tengan reservas en esta escuela (ES o CA)
+    $todos_pedidos   = skc_csv_get_pedidos_exportacion();
+    $pedidos_escuela = [];
+    foreach ( $todos_pedidos as $pedido ) {
+        $plazas = $pedido->get_meta( 'plazas_reservadas' );
+        if ( ! is_array( $plazas ) ) {
+            continue;
+        }
+
+        foreach ( $plazas as $datos_semana ) {
+            $es_escuela = (
+                ( isset( $datos_semana['escuela_id'] ) && (int) $datos_semana['escuela_id'] === $escuela_id )
+                || ( isset( $datos_semana['product_id'] ) && ( (int) $datos_semana['product_id'] === $product_id || (int) $datos_semana['product_id'] === $product_id_ca ) )
+            );
+
+            if ( $es_escuela ) {
+                $pedidos_escuela[] = $pedido;
+                break;
+            }
+        }
+    }
+
+    // Cabeceras: base comun + una columna por semana+horario
+    $cabeceras_dinamicas = [];
+    foreach ( $columnas as $col ) {
+        $cabeceras_dinamicas[] = $col['header'];
+    }
+    $cabeceras = array_merge( skc_csv_get_cabeceras_base_comun(), $cabeceras_dinamicas );
+
+    // Iniciar descarga
+    $nombre_archivo = 'reservas_' . $slug_archivo . '_' . date( 'Y-m-d' ) . '.csv';
+    header( 'Content-Type: text/csv; charset=UTF-8' );
+    header( 'Content-Disposition: attachment; filename="' . $nombre_archivo . '"' );
+    ob_clean();
+    flush();
+
+    $output = fopen( 'php://output', 'w' );
+    fprintf( $output, chr( 0xEF ) . chr( 0xBB ) . chr( 0xBF ) ); // BOM UTF-8
+
+    fputcsv( $output, $cabeceras );
+
+    foreach ( $pedidos_escuela as $pedido ) {
+        // Columnas base (datos alumno, tutor, etc.)
+        $fila = skc_csv_construir_fila_base_comun( $pedido );
+
+        // Construir mapa de reservas del pedido para esta escuela: key => 1
+        $plazas     = $pedido->get_meta( 'plazas_reservadas' );
+        $plazas_map = [];
+
+        if ( is_array( $plazas ) ) {
+            foreach ( $plazas as $semana_label => $datos_semana ) {
+                $es_escuela = (
+                    ( isset( $datos_semana['escuela_id'] ) && (int) $datos_semana['escuela_id'] === $escuela_id )
+                    || ( isset( $datos_semana['product_id'] ) && ( (int) $datos_semana['product_id'] === $product_id || (int) $datos_semana['product_id'] === $product_id_ca ) )
+                );
+
+                if ( ! $es_escuela ) {
+                    continue;
+                }
+
+                $semana_id = skc_obtener_semana_id_por_nombre( (string) $semana_label, $escuela_id );
+                if ( ! $semana_id ) {
+                    // Fallback para históricos donde la semana no resuelve con escuela concreta.
+                    $semana_id = skc_obtener_semana_id_por_nombre( (string) $semana_label, null );
+                }
+                if ( ! $semana_id ) {
+                    continue;
+                }
+
+                $horario_raw = isset( $datos_semana['horario'] ) ? (string) $datos_semana['horario'] : '';
+                $tipo = skc_resolver_tipo_horario_por_semana( (int) $semana_id, $horario_raw );
+                if ( ! $tipo ) {
+                    // Si ya viene guardado como tipo_horario, reutilizarlo.
+                    $tipo = trim( $horario_raw );
+                }
+                if ( $tipo === '' ) {
+                    continue;
+                }
+
+                $plazas_map[ (int) $semana_id . '||' . $tipo ] = '1';
+
+                if ( isset( $datos_semana['beca'] ) && strtolower( trim( (string) $datos_semana['beca'] ) ) === 'si' ) {
+                    $plazas_map[ (int) $semana_id . '||beca' ] = '1';
+                }
+
+                if ( isset( $datos_semana['acogida'] ) && strtolower( trim( (string) $datos_semana['acogida'] ) ) === 'si' ) {
+                    $plazas_map[ (int) $semana_id . '||acogida' ] = '1';
+                }
+            }
+        }
+
+        // Rellenar columnas dinamicas: 1 si reservado, 0 si no
+        foreach ( $columnas as $col ) {
+            $fila[] = isset( $plazas_map[ $col['key'] ] ) ? '1' : '0';
+        }
+
+        fputcsv( $output, $fila );
+    }
+
+    fclose( $output );
     exit;
 }
 
