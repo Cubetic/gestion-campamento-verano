@@ -401,9 +401,7 @@ function mostrar_formulario_edicion_pedido($order_id)
                                 </option>
                                 <?php
                                 if (!empty($semanas_bd)) {
-                                    foreach ($semanas_bd as $fila) {
-                                        // El valor será el "nombre_semana" que queremos asignar
-                                        $nombre_semana = $fila->semana;
+                                    foreach ($semanas_bd as $nombre_semana) {
                                         ?>
                                         <option value="<?php echo esc_attr($nombre_semana); ?>">
                                             <?php echo esc_html($nombre_semana); ?>
@@ -514,9 +512,35 @@ function obtener_semanas_disponibles()
 {
     global $wpdb;
     $tabla = $wpdb->prefix . 'semanas_campamento'; // Ajusta el nombre de tu tabla
-    // Recuperamos todas las semanas, por ejemplo id y nombre
-    $results = $wpdb->get_results("SELECT id, semana FROM $tabla ORDER BY id ASC");
-    return $results; // Array de objetos con ->semana_id y ->nombre_semana
+    // Recuperamos semanas en ES y CA, y devolvemos una lista unica para el selector.
+    $results = $wpdb->get_results("SELECT id, semana, semana_ca FROM $tabla ORDER BY id ASC", ARRAY_A);
+
+    $lista = [];
+    $vistos = [];
+
+    foreach ((array) $results as $row) {
+        $candidatas = [
+            isset($row['semana']) ? (string) $row['semana'] : '',
+            isset($row['semana_ca']) ? (string) $row['semana_ca'] : '',
+        ];
+
+        foreach ($candidatas as $nombre_semana) {
+            $nombre_semana = trim(preg_replace('/\s+/u', ' ', $nombre_semana));
+            if ($nombre_semana === '') {
+                continue;
+            }
+
+            $clave = function_exists('mb_strtolower') ? mb_strtolower($nombre_semana, 'UTF-8') : strtolower($nombre_semana);
+            if (isset($vistos[$clave])) {
+                continue;
+            }
+
+            $vistos[$clave] = true;
+            $lista[] = $nombre_semana;
+        }
+    }
+
+    return $lista;
 }
 
 /**
